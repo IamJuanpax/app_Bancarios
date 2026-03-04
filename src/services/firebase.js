@@ -30,14 +30,14 @@ import { getFirestore } from 'firebase/firestore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // ── Configuración de Firebase ──
-// TODO: Reemplazar con las credenciales reales de tu proyecto Firebase
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_AUTH_DOMAIN",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_STORAGE_BUCKET",
-  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-  appId: "YOUR_APP_ID"
+  apiKey: "AIzaSyDhzDv8G8TQFpGOXnq5iCHNe5G5HihA5qI",
+  authDomain: "rehabmobile-69cd4.firebaseapp.com",
+  projectId: "rehabmobile-69cd4",
+  storageBucket: "rehabmobile-69cd4.firebasestorage.app",
+  messagingSenderId: "567956905340",
+  appId: "1:567956905340:web:9d6be04a1db5ae7ce9d8f9",
+  measurementId: "G-RMTTDJFVJG"
 };
 
 // Inicializar la app de Firebase
