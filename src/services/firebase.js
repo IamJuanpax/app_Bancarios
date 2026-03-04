@@ -28,16 +28,26 @@ import { initializeApp } from 'firebase/app';
 import { initializeAuth, getReactNativePersistence } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import {
+  FIREBASE_API_KEY,
+  FIREBASE_AUTH_DOMAIN,
+  FIREBASE_PROJECT_ID,
+  FIREBASE_STORAGE_BUCKET,
+  FIREBASE_MESSAGING_SENDER_ID,
+  FIREBASE_APP_ID,
+  FIREBASE_MEASUREMENT_ID,
+} from '@env';
 
 // ── Configuración de Firebase ──
+// Las credenciales se leen del archivo .env (no se suben a GitHub)
 const firebaseConfig = {
-  apiKey: "AIzaSyDhzDv8G8TQFpGOXnq5iCHNe5G5HihA5qI",
-  authDomain: "rehabmobile-69cd4.firebaseapp.com",
-  projectId: "rehabmobile-69cd4",
-  storageBucket: "rehabmobile-69cd4.firebasestorage.app",
-  messagingSenderId: "567956905340",
-  appId: "1:567956905340:web:9d6be04a1db5ae7ce9d8f9",
-  measurementId: "G-RMTTDJFVJG"
+  apiKey: FIREBASE_API_KEY,
+  authDomain: FIREBASE_AUTH_DOMAIN,
+  projectId: FIREBASE_PROJECT_ID,
+  storageBucket: FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: FIREBASE_MESSAGING_SENDER_ID,
+  appId: FIREBASE_APP_ID,
+  measurementId: FIREBASE_MEASUREMENT_ID,
 };
 
 // Inicializar la app de Firebase
