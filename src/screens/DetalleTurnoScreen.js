@@ -188,9 +188,18 @@ export default function DetalleTurnoScreen({ route, navigation }) {
                     text: 'Sí, aceptar',
                     onPress: async () => {
                         try {
-                            await updateEstadoTurno(turnoId, 'aceptado');
-                            setTurno(prev => ({ ...prev, estado: 'aceptado' }));
-                            Alert.alert('✅ Turno aceptado', 'El turno fue aceptado exitosamente.');
+                            // Asignar el médico que acepta el turno
+                            await updateEstadoTurno(turnoId, 'aceptado', {
+                                medico_id: user?.uid || '',
+                                medicoNombre: user?.displayName || user?.email || 'Médico',
+                            });
+                            setTurno(prev => ({
+                                ...prev,
+                                estado: 'aceptado',
+                                medico_id: user?.uid || '',
+                                medicoNombre: user?.displayName || user?.email || 'Médico',
+                            }));
+                            Alert.alert('✅ Turno aceptado', 'El turno fue aceptado y asignado a tu nombre.');
                         } catch (error) {
                             Alert.alert('Error', 'No se pudo aceptar el turno.');
                         } finally {

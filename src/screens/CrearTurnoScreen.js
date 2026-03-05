@@ -55,6 +55,7 @@ export default function CrearTurnoScreen({ route, navigation }) {
     const [notas, setNotas] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [showPacienteList, setShowPacienteList] = useState(false);
+    const [pacienteTelefono, setPacienteTelefono] = useState('');
 
     // Cargar lista de pacientes al montar
     useEffect(() => {
@@ -76,6 +77,7 @@ export default function CrearTurnoScreen({ route, navigation }) {
     const selectPaciente = (paciente) => {
         setPacienteSeleccionado(paciente.id);
         setPacienteNombre(paciente.nombre);
+        setPacienteTelefono(paciente.telefono || '');
         setShowPacienteList(false);
     };
 
@@ -169,8 +171,9 @@ export default function CrearTurnoScreen({ route, navigation }) {
             await createTurno({
                 paciente_id: pacienteSeleccionado,
                 pacienteNombre: pacienteNombre,
-                medico_id: user?.uid || '',
-                medicoNombre: user?.displayName || user?.email || 'Médico',
+                pacienteTelefono: pacienteTelefono,  // Para mostrar en la card del turno
+                medico_id: '',           // Sin médico asignado inicialmente
+                medicoNombre: '',        // Se asigna cuando un médico acepta el turno
                 fecha_hora: fechaHora,
                 notas: notas.trim(),
             });

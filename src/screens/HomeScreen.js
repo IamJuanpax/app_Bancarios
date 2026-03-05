@@ -59,15 +59,8 @@ export default function HomeScreen({ navigation }) {
       const pacientesData = await getPacientes();
       setPacientes(pacientesData);
 
-      // Cargar turnos según el rol
-      let turnosData;
-      if (userRole === 'admin') {
-        // Admin ve todos los turnos del sistema
-        turnosData = await getAllTurnos();
-      } else {
-        // Médico ve solo sus turnos asignados
-        turnosData = user ? await getTurnosByMedico(user.uid) : [];
-      }
+      // Cargar todos los turnos (los pendientes no tienen médico asignado)
+      const turnosData = await getAllTurnos();
       setTurnos(turnosData);
     } catch (error) {
       console.error('Error al cargar datos del dashboard:', error);
@@ -121,7 +114,9 @@ export default function HomeScreen({ navigation }) {
         {/* ── Header: Saludo + Logout ── */}
         <View style={styles.header}>
           <View>
-            <Text style={styles.greeting}>Hola 👋</Text>
+            <Text style={styles.greeting}>
+              Hola{user?.displayName ? `, ${user.displayName}` : ''} 👋
+            </Text>
             <Text style={styles.role}>
               {userRole === 'admin' ? '🛡️ Administrador' : '👨‍⚕️ Médico'}
             </Text>
@@ -174,15 +169,13 @@ export default function HomeScreen({ navigation }) {
             <Text style={styles.quickActionLabel}>Turnos</Text>
           </TouchableOpacity>
 
-          {userRole === 'admin' && (
-            <TouchableOpacity
-              style={styles.quickActionButton}
-              onPress={() => navigation.navigate('CrearPaciente')}
-            >
-              <Text style={styles.quickActionIcon}>➕</Text>
-              <Text style={styles.quickActionLabel}>Nuevo Pac.</Text>
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity
+            style={styles.quickActionButton}
+            onPress={() => navigation.navigate('CrearPaciente')}
+          >
+            <Text style={styles.quickActionIcon}>➕</Text>
+            <Text style={styles.quickActionLabel}>Nuevo Pac.</Text>
+          </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.quickActionButton}

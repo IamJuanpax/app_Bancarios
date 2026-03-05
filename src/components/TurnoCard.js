@@ -100,13 +100,21 @@ export default function TurnoCard({
                 </View>
             )}
 
-            {/* Nombre del médico (si se muestra, ej: desde vista de paciente) */}
-            {showDoctor && turno.medicoNombre && (
+            {/* Teléfono del paciente */}
+            {showPatient && turno.pacienteTelefono && (
+                <View style={styles.infoRow}>
+                    <Text style={styles.infoIcon}>📞</Text>
+                    <Text style={styles.infoText}>{turno.pacienteTelefono}</Text>
+                </View>
+            )}
+
+            {/* Nombre del médico (solo si tiene uno asignado) */}
+            {showDoctor && turno.medicoNombre ? (
                 <View style={styles.infoRow}>
                     <Text style={styles.infoIcon}>👨‍⚕️</Text>
                     <Text style={styles.infoText}>Dr. {turno.medicoNombre}</Text>
                 </View>
-            )}
+            ) : null}
 
             {/* Notas del turno (si las hay) */}
             {turno.notas ? (

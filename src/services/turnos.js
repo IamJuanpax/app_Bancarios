@@ -120,12 +120,14 @@ export const createTurno = async (data) => {
  * 
  * @param {string} id - ID del turno
  * @param {string} nuevoEstado - Nuevo estado ('aceptado', 'completado', 'cancelado')
+ * @param {object} [extraData] - Datos adicionales a guardar (ej: medico_id, medicoNombre)
  * @returns {Promise<void>}
  */
-export const updateEstadoTurno = async (id, nuevoEstado) => {
+export const updateEstadoTurno = async (id, nuevoEstado, extraData = {}) => {
     const docRef = doc(db, COLLECTION_NAME, id);
     return updateDoc(docRef, {
         estado: nuevoEstado,
+        ...extraData,
         actualizadoEn: serverTimestamp(),
     });
 };

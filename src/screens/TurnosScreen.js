@@ -60,12 +60,8 @@ export default function TurnosScreen({ navigation }) {
 
     const loadData = async () => {
         try {
-            let data;
-            if (userRole === 'admin') {
-                data = await getAllTurnos();
-            } else {
-                data = user ? await getTurnosByMedico(user.uid) : [];
-            }
+            // Todos ven todos los turnos (los pendientes no tienen médico asignado)
+            const data = await getAllTurnos();
             setTurnos(data);
         } catch (error) {
             console.error('Error al cargar turnos:', error);
