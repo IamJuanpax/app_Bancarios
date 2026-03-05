@@ -185,21 +185,19 @@ export default function PacientesScreen({ navigation }) {
                             ? `No se encontraron resultados para "${searchQuery}"`
                             : 'Aún no se han registrado pacientes en el sistema.'
                     }
-                    actionLabel={userRole === 'admin' ? 'Agregar Paciente' : undefined}
-                    onAction={userRole === 'admin' ? () => navigation.navigate('CrearPaciente') : undefined}
+                    actionLabel={'Agregar Paciente'}
+                    onAction={() => navigation.navigate('CrearPaciente')}
                 />
             )}
 
             {/* ── FAB: Botón flotante para agregar paciente (solo Admin) ── */}
-            {userRole === 'admin' && (
-                <TouchableOpacity
-                    style={styles.fab}
-                    onPress={() => navigation.navigate('CrearPaciente')}
-                    activeOpacity={0.8}
-                >
-                    <Text style={styles.fabText}>+</Text>
-                </TouchableOpacity>
-            )}
+            <TouchableOpacity
+                style={styles.fab}
+                onPress={() => navigation.navigate('CrearPaciente')}
+                activeOpacity={0.8}
+            >
+                <Text style={styles.fabText}>+</Text>
+            </TouchableOpacity>
         </SafeAreaView>
     );
 }

@@ -268,25 +268,21 @@ export default function DetallePacienteScreen({ route, navigation }) {
 
                 {/* ── Acciones ── */}
                 <View style={styles.actions}>
-                    {userRole === 'admin' && (
-                        <>
-                            <TouchableOpacity
-                                style={styles.actionButton}
-                                onPress={() => navigation.navigate('EditarPaciente', { pacienteId })}
-                            >
-                                <Text style={styles.actionIcon}>✏️</Text>
-                                <Text style={styles.actionLabel}>Editar</Text>
-                            </TouchableOpacity>
+                    <TouchableOpacity
+                        style={styles.actionButton}
+                        onPress={() => navigation.navigate('EditarPaciente', { pacienteId })}
+                    >
+                        <Text style={styles.actionIcon}>✏️</Text>
+                        <Text style={styles.actionLabel}>Editar</Text>
+                    </TouchableOpacity>
 
-                            <TouchableOpacity
-                                style={[styles.actionButton, styles.actionButtonDanger]}
-                                onPress={handleDelete}
-                            >
-                                <Text style={styles.actionIcon}>🗑️</Text>
-                                <Text style={[styles.actionLabel, { color: theme.colors.error }]}>Eliminar</Text>
-                            </TouchableOpacity>
-                        </>
-                    )}
+                    <TouchableOpacity
+                        style={[styles.actionButton, styles.actionButtonDanger]}
+                        onPress={handleDelete}
+                    >
+                        <Text style={styles.actionIcon}>🗑️</Text>
+                        <Text style={[styles.actionLabel, { color: theme.colors.error }]}>Eliminar</Text>
+                    </TouchableOpacity>
 
                     <TouchableOpacity
                         style={styles.actionButton}

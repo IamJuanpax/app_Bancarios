@@ -80,6 +80,43 @@ export default function CrearTurnoScreen({ route, navigation }) {
     };
 
     /**
+     * Auto-formatea la fecha mientras el usuario escribe.
+     * Entrada del usuario: solo dígitos → Auto-inserta las barras /
+     * Ejemplo: "15" → "15/" → "1503" → "15/03/" → "15032026" → "15/03/2026"
+     */
+    const handleFechaChange = (text) => {
+        // Quitar todo lo que no sea dígito
+        const digits = text.replace(/\D/g, '');
+
+        let formatted = '';
+        if (digits.length <= 2) {
+            formatted = digits;
+        } else if (digits.length <= 4) {
+            formatted = digits.slice(0, 2) + '/' + digits.slice(2);
+        } else {
+            formatted = digits.slice(0, 2) + '/' + digits.slice(2, 4) + '/' + digits.slice(4, 8);
+        }
+        setFecha(formatted);
+    };
+
+    /**
+     * Auto-formatea la hora mientras el usuario escribe.
+     * Entrada del usuario: solo dígitos → Auto-inserta los dos puntos :
+     * Ejemplo: "14" → "14:" → "1430" → "14:30"
+     */
+    const handleHoraChange = (text) => {
+        const digits = text.replace(/\D/g, '');
+
+        let formatted = '';
+        if (digits.length <= 2) {
+            formatted = digits;
+        } else {
+            formatted = digits.slice(0, 2) + ':' + digits.slice(2, 4);
+        }
+        setHora(formatted);
+    };
+
+    /**
      * Parsea la fecha y hora ingresadas y crea el turno en Firestore.
      * Formato esperado: fecha → DD/MM/AAAA, hora → HH:MM
      */
@@ -206,27 +243,29 @@ export default function CrearTurnoScreen({ route, navigation }) {
 
                     {/* ── Campo: Fecha ── */}
                     <View style={styles.fieldGroup}>
-                        <Text style={styles.label}>Fecha * (DD/MM/AAAA)</Text>
+                        <Text style={styles.label}>Fecha *</Text>
                         <TextInput
                             style={styles.input}
-                            placeholder="Ej: 15/03/2026"
+                            placeholder="DD/MM/AAAA"
                             placeholderTextColor={theme.colors.textMuted}
-                            keyboardType="numeric"
+                            keyboardType="number-pad"
+                            maxLength={10}
                             value={fecha}
-                            onChangeText={setFecha}
+                            onChangeText={handleFechaChange}
                         />
                     </View>
 
                     {/* ── Campo: Hora ── */}
                     <View style={styles.fieldGroup}>
-                        <Text style={styles.label}>Hora * (HH:MM)</Text>
+                        <Text style={styles.label}>Hora *</Text>
                         <TextInput
                             style={styles.input}
-                            placeholder="Ej: 14:30"
+                            placeholder="HH:MM"
                             placeholderTextColor={theme.colors.textMuted}
-                            keyboardType="numeric"
+                            keyboardType="number-pad"
+                            maxLength={5}
                             value={hora}
-                            onChangeText={setHora}
+                            onChangeText={handleHoraChange}
                         />
                     </View>
 
