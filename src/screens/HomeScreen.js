@@ -36,7 +36,7 @@ import LoadingSpinner from '../components/LoadingSpinner';
 
 export default function HomeScreen({ navigation }) {
   // ── Estado ──
-  const { user, userRole, logout } = useAuth();
+  const { user, userRole, userName, logout } = useAuth();
   const [pacientes, setPacientes] = useState([]);      // Lista de pacientes
   const [turnos, setTurnos] = useState([]);            // Lista de turnos
   const [loading, setLoading] = useState(true);        // Carga inicial
@@ -115,7 +115,7 @@ export default function HomeScreen({ navigation }) {
         <View style={styles.header}>
           <View>
             <Text style={styles.greeting}>
-              Hola{user?.displayName ? `, ${user.displayName}` : ''} 👋
+              Hola{userName ? `, ${userName}` : (user?.displayName ? `, ${user.displayName}` : '')} 👋
             </Text>
             <Text style={styles.role}>
               {userRole === 'admin' ? '🛡️ Administrador' : '👨‍⚕️ Médico'}

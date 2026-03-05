@@ -49,6 +49,7 @@ export const useAuth = () => {
 export function AuthProvider({ children }) {
     const [user, setUser] = useState(null);         // Usuario de Firebase Auth
     const [userRole, setUserRole] = useState(null);  // 'admin' | 'medico'
+    const [userName, setUserName] = useState(null);  // Nombre del usuario desde Firestore
     const [loading, setLoading] = useState(true);    // Cargando sesión inicial
 
     useEffect(() => {
@@ -59,10 +60,15 @@ export function AuthProvider({ children }) {
                 // Usuario autenticado → buscar su rol en Firestore
                 setUser(firebaseUser);
                 try {
-                    const userDoc = await getDoc(doc(db, 'usuarios', firebaseUser.uid));
+                    const userDoc = await getDoc(doc(db, 'Usuarios', firebaseUser.uid));
                     if (userDoc.exists()) {
-                        setUserRole(userDoc.data().rol); // 'admin' o 'medico'
+                        const data = userDoc.data();
+                        console.log('📋 Datos del usuario en Firestore:', JSON.stringify(data));
+                        console.log('📋 Campos disponibles:', Object.keys(data));
+                        setUserRole(data.rol); // 'admin' o 'medico'
+                        setUserName(data.nombre || data.Nombre || data.name || null); // Nombre del usuario
                     } else {
+                        console.log('⚠️ No se encontró documento de usuario en colección "usuarios" para UID:', firebaseUser.uid);
                         // Si no tiene documento en Firestore, se asume sin rol
                         setUserRole(null);
                     }
@@ -74,6 +80,7 @@ export function AuthProvider({ children }) {
                 // No hay usuario autenticado
                 setUser(null);
                 setUserRole(null);
+                setUserName(null);
             }
             setLoading(false);
         });
@@ -98,6 +105,7 @@ export function AuthProvider({ children }) {
      */
     const logout = async () => {
         setUserRole(null);
+        setUserName(null);
         return signOut(auth);
     };
 
@@ -105,6 +113,7 @@ export function AuthProvider({ children }) {
     const value = {
         user,
         userRole,
+        userName,
         loading,
         login,
         logout,

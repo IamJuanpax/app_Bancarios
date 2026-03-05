@@ -55,11 +55,12 @@ const STATUS_CONFIG = {
 
 export default function DetalleTurnoScreen({ route, navigation }) {
     const { turnoId } = route.params;
-    const { userRole } = useAuth();
+    const { user, userRole, userName } = useAuth();
 
     // ── Estado ──
     const [turno, setTurno] = useState(null);
     const [paciente, setPaciente] = useState(null);
+    const [medicoNombreDisplay, setMedicoNombreDisplay] = useState(null); // Nombre real del médico desde Firestore
     const [loading, setLoading] = useState(true);
     const [actionLoading, setActionLoading] = useState(false);
     // Estado de proximidad
@@ -85,6 +86,18 @@ export default function DetalleTurnoScreen({ route, navigation }) {
                 if (turnoData.paciente_id) {
                     const pacienteData = await getPacienteById(turnoData.paciente_id);
                     setPaciente(pacienteData);
+                }
+
+                // Cargar nombre real del médico desde la colección usuarios
+                if (turnoData.medico_id) {
+                    try {
+                        const medicoDoc = await getDoc(doc(db, 'Usuarios', turnoData.medico_id));
+                        if (medicoDoc.exists() && medicoDoc.data().nombre) {
+                            setMedicoNombreDisplay(medicoDoc.data().nombre);
+                        }
+                    } catch (e) {
+                        console.warn('No se pudo cargar nombre del médico:', e);
+                    }
                 }
             }
         } catch (error) {
@@ -189,19 +202,21 @@ export default function DetalleTurnoScreen({ route, navigation }) {
                     onPress: async () => {
                         try {
                             // Asignar el médico que acepta el turno
+                            const nombreMedico = userName || user?.displayName || user?.email || 'Médico';
                             await updateEstadoTurno(turnoId, 'aceptado', {
                                 medico_id: user?.uid || '',
-                                medicoNombre: user?.displayName || user?.email || 'Médico',
+                                medicoNombre: nombreMedico,
                             });
                             setTurno(prev => ({
                                 ...prev,
                                 estado: 'aceptado',
                                 medico_id: user?.uid || '',
-                                medicoNombre: user?.displayName || user?.email || 'Médico',
+                                medicoNombre: nombreMedico,
                             }));
                             Alert.alert('✅ Turno aceptado', 'El turno fue aceptado y asignado a tu nombre.');
                         } catch (error) {
-                            Alert.alert('Error', 'No se pudo aceptar el turno.');
+                            console.error('Error al aceptar turno:', error);
+                            Alert.alert('Error', `No se pudo aceptar el turno: ${error.message}`);
                         } finally {
                             setActionLoading(false);
                         }
@@ -321,7 +336,11 @@ export default function DetalleTurnoScreen({ route, navigation }) {
                         <Text style={styles.infoIcon}>👨‍⚕️</Text>
                         <View>
                             <Text style={styles.infoLabel}>Médico asignado</Text>
-                            <Text style={styles.infoValue}>Dr. {turno.medicoNombre || 'Sin asignar'}</Text>
+                            <Text style={styles.infoValue}>
+                                {turno.medico_id
+                                    ? `Dr. ${medicoNombreDisplay || turno.medicoNombre || 'Sin nombre'}`
+                                    : 'Sin asignar'}
+                            </Text>
                         </View>
                     </View>
 
@@ -440,14 +459,14 @@ export default function DetalleTurnoScreen({ route, navigation }) {
                             </View>
                         )}
 
-                        {/* Eliminar turno (solo si está cancelado) */}
-                        {turno.estado === 'cancelado' && (
+                        {/* Eliminar turno (solo si está cancelado o completado) */}
+                        {(turno.estado === 'cancelado' || turno.estado === 'completado') && (
                             <TouchableOpacity
                                 style={[styles.actionButton, { backgroundColor: theme.colors.error }]}
                                 onPress={() => {
                                     Alert.alert(
                                         '🗑️ Eliminar turno',
-                                        '¿Estás seguro de que querés eliminar este turno cancelado? Esta acción no se puede deshacer.',
+                                        `¿Estás seguro de que querés eliminar este turno ${turno.estado}? Esta acción no se puede deshacer.`,
                                         [
                                             { text: 'No', style: 'cancel' },
                                             {
