@@ -63,12 +63,9 @@ export function AuthProvider({ children }) {
                     const userDoc = await getDoc(doc(db, 'Usuarios', firebaseUser.uid));
                     if (userDoc.exists()) {
                         const data = userDoc.data();
-                        console.log('📋 Datos del usuario en Firestore:', JSON.stringify(data));
-                        console.log('📋 Campos disponibles:', Object.keys(data));
-                        setUserRole(data.rol); // 'admin' o 'medico'
-                        setUserName(data.nombre || data.Nombre || data.name || null); // Nombre del usuario
+                        setUserRole(data.rol);
+                        setUserName(data.nombre || data.Nombre || data.name || null);
                     } else {
-                        console.log('⚠️ No se encontró documento de usuario en colección "usuarios" para UID:', firebaseUser.uid);
                         // Si no tiene documento en Firestore, se asume sin rol
                         setUserRole(null);
                     }
