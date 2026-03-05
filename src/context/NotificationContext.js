@@ -73,7 +73,13 @@ export function NotificationProvider({ children, navigationRef }) {
 
     useEffect(() => {
         // Configurar el handler de notificaciones (cómo se muestran en foreground)
-        configureNotifications();
+        // Envuelto en try-catch: en Expo Go SDK 53+ esto puede lanzar un error
+        // sobre remote notifications que NO afecta a las notificaciones locales.
+        try {
+            configureNotifications();
+        } catch (e) {
+            console.log('ℹ️ configureNotifications:', e.message);
+        }
     }, []);
 
     useEffect(() => {
@@ -85,27 +91,32 @@ export function NotificationProvider({ children, navigationRef }) {
                 console.log('ℹ️ Permisos de notificaciones:', e.message);
             });
 
-            // Listener: notificación recibida mientras la app está abierta
-            notificationListener.current = Notifications.addNotificationReceivedListener(
-                (notification) => {
-                    console.log('📩 Notificación recibida:', notification.request.content.title);
-                }
-            );
-
-            // Listener: usuario tocó una notificación
-            responseListener.current = Notifications.addNotificationResponseReceivedListener(
-                (response) => {
-                    const data = response.notification.request.content.data;
-                    console.log('👆 Notificación tocada, data:', data);
-
-                    // Navegar a la pantalla correspondiente si hay un deep-link
-                    if (data?.screen && data?.turnoId && navigationRef?.current) {
-                        navigationRef.current.navigate(data.screen, {
-                            turnoId: data.turnoId,
-                        });
+            // Listeners de notificaciones (también envueltos por seguridad)
+            try {
+                // Listener: notificación recibida mientras la app está abierta
+                notificationListener.current = Notifications.addNotificationReceivedListener(
+                    (notification) => {
+                        console.log('📩 Notificación recibida:', notification.request.content.title);
                     }
-                }
-            );
+                );
+
+                // Listener: usuario tocó una notificación
+                responseListener.current = Notifications.addNotificationResponseReceivedListener(
+                    (response) => {
+                        const data = response.notification.request.content.data;
+                        console.log('👆 Notificación tocada, data:', data);
+
+                        // Navegar a la pantalla correspondiente si hay un deep-link
+                        if (data?.screen && data?.turnoId && navigationRef?.current) {
+                            navigationRef.current.navigate(data.screen, {
+                                turnoId: data.turnoId,
+                            });
+                        }
+                    }
+                );
+            } catch (e) {
+                console.log('ℹ️ Notification listeners:', e.message);
+            }
         }
 
         // Cleanup al desmontar o cambiar de usuario

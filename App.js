@@ -21,8 +21,16 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { View, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, ActivityIndicator, StyleSheet, LogBox } from 'react-native';
 import * as Font from 'expo-font';
+
+// Silenciar el warning de expo-notifications sobre remote notifications en Expo Go.
+// Usamos SOLO notificaciones locales (costo $0), así que este warning no nos afecta.
+LogBox.ignoreLogs([
+  'expo-notifications',
+  'Android Push notifications',
+  'remote notifications',
+]);
 import {
   Inter_400Regular,
   Inter_700Bold,
