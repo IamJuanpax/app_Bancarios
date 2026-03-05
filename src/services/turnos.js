@@ -30,6 +30,7 @@ import {
     getDoc,
     addDoc,
     updateDoc,
+    deleteDoc,
     doc,
     query,
     where,
@@ -145,4 +146,16 @@ export const updateTurno = async (id, data) => {
         ...data,
         actualizadoEn: serverTimestamp(),
     });
+};
+
+/**
+ * Elimina un turno de Firestore.
+ * Solo se debe llamar para turnos cancelados (por seguridad).
+ * 
+ * @param {string} id - ID del turno a eliminar
+ * @returns {Promise<void>}
+ */
+export const deleteTurno = async (id) => {
+    const docRef = doc(db, COLLECTION_NAME, id);
+    return deleteDoc(docRef);
 };

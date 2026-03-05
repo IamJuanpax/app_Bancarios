@@ -35,7 +35,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
 import { theme } from '../theme';
 import { useAuth } from '../context/AuthContext';
-import { updateEstadoTurno } from '../services/turnos';
+import { updateEstadoTurno, deleteTurno } from '../services/turnos';
 import { getPacienteById } from '../services/pacientes';
 import { calculateDistance, isWithinRange, formatDistance } from '../utils/haversine';
 import { doc, getDoc } from 'firebase/firestore';
@@ -431,13 +431,47 @@ export default function DetalleTurnoScreen({ route, navigation }) {
                             </>
                         )}
 
-                        {/* Si completado o cancelado → Estado final, sin acciones */}
+                        {/* Si completado o cancelado → Estado final */}
                         {(turno.estado === 'completado' || turno.estado === 'cancelado') && (
                             <View style={styles.finalStateBanner}>
                                 <Text style={styles.finalStateText}>
-                                    Este turno ya fue {turno.estado}. No se pueden realizar más acciones.
+                                    Este turno ya fue {turno.estado}.
                                 </Text>
                             </View>
+                        )}
+
+                        {/* Eliminar turno (solo si está cancelado) */}
+                        {turno.estado === 'cancelado' && (
+                            <TouchableOpacity
+                                style={[styles.actionButton, { backgroundColor: theme.colors.error }]}
+                                onPress={() => {
+                                    Alert.alert(
+                                        '🗑️ Eliminar turno',
+                                        '¿Estás seguro de que querés eliminar este turno cancelado? Esta acción no se puede deshacer.',
+                                        [
+                                            { text: 'No', style: 'cancel' },
+                                            {
+                                                text: 'Sí, eliminar',
+                                                style: 'destructive',
+                                                onPress: async () => {
+                                                    setActionLoading(true);
+                                                    try {
+                                                        await deleteTurno(turnoId);
+                                                        Alert.alert('✅ Turno eliminado', 'El turno fue eliminado permanentemente.');
+                                                        navigation.goBack();
+                                                    } catch (error) {
+                                                        Alert.alert('Error', 'No se pudo eliminar el turno.');
+                                                    } finally {
+                                                        setActionLoading(false);
+                                                    }
+                                                },
+                                            },
+                                        ]
+                                    );
+                                }}
+                            >
+                                <Text style={styles.actionButtonText}>🗑️ Eliminar Turno</Text>
+                            </TouchableOpacity>
                         )}
                     </View>
                 )}

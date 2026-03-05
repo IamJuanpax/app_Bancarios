@@ -163,18 +163,18 @@ export default function HomeScreen({ navigation }) {
 
           <TouchableOpacity
             style={styles.quickActionButton}
-            onPress={() => navigation.navigate('Turnos')}
-          >
-            <Text style={styles.quickActionIcon}>📅</Text>
-            <Text style={styles.quickActionLabel}>Turnos</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.quickActionButton}
             onPress={() => navigation.navigate('CrearPaciente')}
           >
             <Text style={styles.quickActionIcon}>➕</Text>
             <Text style={styles.quickActionLabel}>Nuevo Pac.</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.quickActionButton}
+            onPress={() => navigation.navigate('Turnos')}
+          >
+            <Text style={styles.quickActionIcon}>📅</Text>
+            <Text style={styles.quickActionLabel}>Turnos</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
