@@ -79,7 +79,11 @@ export function NotificationProvider({ children, navigationRef }) {
     useEffect(() => {
         if (user) {
             // Usuario logueado → solicitar permisos
-            requestNotificationPermissions();
+            // Envuelto en try-catch para evitar errores en Expo Go (SDK 53+)
+            // donde las notificaciones remotas no están disponibles
+            requestNotificationPermissions().catch((e) => {
+                console.log('ℹ️ Permisos de notificaciones:', e.message);
+            });
 
             // Listener: notificación recibida mientras la app está abierta
             notificationListener.current = Notifications.addNotificationReceivedListener(

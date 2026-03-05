@@ -28,6 +28,7 @@
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Constants from 'expo-constants';
 
 // ── Clave de AsyncStorage para mapear turnoId → notificationId ──
 const REMINDER_STORAGE_KEY = '@rehab_reminders';
@@ -61,6 +62,8 @@ export const requestNotificationPermissions = async () => {
         const { status: existingStatus } = await Notifications.getPermissionsAsync();
 
         if (existingStatus === 'granted') {
+            // Ya se tienen permisos, solo configurar canales Android
+            await setupAndroidChannels();
             return true;
         }
 
@@ -71,31 +74,51 @@ export const requestNotificationPermissions = async () => {
             return false;
         }
 
-        // En Android, configurar el canal de notificaciones
-        if (Platform.OS === 'android') {
-            await Notifications.setNotificationChannelAsync('turnos', {
-                name: 'Turnos',
-                description: 'Notificaciones de turnos y citas médicas',
-                importance: Notifications.AndroidImportance.HIGH,
-                vibrationPattern: [0, 250, 250, 250],
-                lightColor: '#50C878', // Verde esmeralda (accent del theme)
-                sound: 'default',
-            });
-
-            await Notifications.setNotificationChannelAsync('recordatorios', {
-                name: 'Recordatorios',
-                description: 'Recordatorios previos a turnos',
-                importance: Notifications.AndroidImportance.HIGH,
-                vibrationPattern: [0, 250, 250, 250],
-                lightColor: '#0A84FF', // Azul info
-                sound: 'default',
-            });
-        }
+        // Configurar canales Android
+        await setupAndroidChannels();
 
         return true;
     } catch (error) {
+        // En Expo Go (SDK 53+), las notificaciones remotas no están disponibles.
+        // Este error es esperado y NO afecta a las notificaciones locales.
+        if (error?.message?.includes('remote notifications') || error?.message?.includes('expo-notifications')) {
+            console.log('ℹ️ Notificaciones remotas no disponibles en Expo Go (esperado, usamos solo locales)');
+            await setupAndroidChannels();
+            return true;
+        }
         console.error('Error al solicitar permisos de notificaciones:', error);
         return false;
+    }
+};
+
+/**
+ * Configura los canales de notificación en Android.
+ * Los canales son obligatorios desde Android 8.0 (API 26).
+ * Se ejecuta de forma segura (no falla si hay error).
+ */
+const setupAndroidChannels = async () => {
+    if (Platform.OS !== 'android') return;
+
+    try {
+        await Notifications.setNotificationChannelAsync('turnos', {
+            name: 'Turnos',
+            description: 'Notificaciones de turnos y citas médicas',
+            importance: Notifications.AndroidImportance.HIGH,
+            vibrationPattern: [0, 250, 250, 250],
+            lightColor: '#50C878',
+            sound: 'default',
+        });
+
+        await Notifications.setNotificationChannelAsync('recordatorios', {
+            name: 'Recordatorios',
+            description: 'Recordatorios previos a turnos',
+            importance: Notifications.AndroidImportance.HIGH,
+            vibrationPattern: [0, 250, 250, 250],
+            lightColor: '#0A84FF',
+            sound: 'default',
+        });
+    } catch (e) {
+        console.warn('⚠️ No se pudieron configurar canales Android:', e.message);
     }
 };
 
