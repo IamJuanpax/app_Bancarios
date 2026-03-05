@@ -1,16 +1,21 @@
 /**
  * ============================================================
- * NUEVA ENTRADA HISTORIA CLÍNICA – Formulario
+ * NUEVA ENTRADA HISTORIA CLÍNICA – Formulario de evolución
  * ============================================================
  * 
- * Permite al médico agregar una nueva entrada a la historia
- * clínica de un paciente. Solo es accesible si el médico
- * está dentro de los 400 metros (la validación se hace en
- * DetallePacienteScreen antes de navegar aquí).
+ * Permite al médico agregar una nueva entrada (visita/evolución)
+ * a la historia clínica de un paciente.
+ * 
+ * Se guarda como documento en la subcolección:
+ *   pacientes/{pacienteId}/historia_clinica/{entradaId}
+ * 
+ * Puede recibir un turnoId opcional para vincular la entrada
+ * directamente con el turno desde el cual se creó.
  * 
  * Campos:
  *   - Nota clínica (observaciones, texto largo)
  *   - Progreso (mejora, estable, empeora, etc.)
+ *   - turnoId (vinculación opcional con turno)
  * 
  * El médico que crea la entrada se guarda automáticamente
  * desde el contexto de Auth.
@@ -44,8 +49,8 @@ const PROGRESO_OPTIONS = [
 ];
 
 export default function NuevaEntradaHistoriaScreen({ route, navigation }) {
-    const { pacienteId, pacienteNombre } = route.params;
-    const { user } = useAuth();
+    const { pacienteId, pacienteNombre, turnoId } = route.params;
+    const { user, userName } = useAuth();
 
     // ── Estado del formulario ──
     const [nota, setNota] = useState('');
@@ -67,9 +72,10 @@ export default function NuevaEntradaHistoriaScreen({ route, navigation }) {
             await createEntradaHistoria({
                 paciente_id: pacienteId,
                 medico: user?.uid || '',
-                medicoNombre: user?.displayName || user?.email || 'Médico',
+                medicoNombre: userName || user?.displayName || user?.email || 'Médico',
                 nota: nota.trim(),
                 progreso: progresoSeleccionado,
+                turnoId: turnoId || null,  // Vincular con turno si viene de uno
             });
             Alert.alert('✅ Entrada guardada', 'La historia clínica se actualizó correctamente.');
             navigation.goBack();
@@ -92,10 +98,19 @@ export default function NuevaEntradaHistoriaScreen({ route, navigation }) {
                     showsVerticalScrollIndicator={false}
                 >
                     {/* ── Cabecera ── */}
-                    <Text style={styles.title}>Nueva Entrada</Text>
+                    <Text style={styles.title}>Nueva Evolución</Text>
                     <Text style={styles.subtitle}>
                         Historia clínica de {pacienteNombre}
                     </Text>
+
+                    {/* Indicador de turno vinculado */}
+                    {turnoId && (
+                        <View style={styles.turnoLinkBanner}>
+                            <Text style={styles.turnoLinkBannerText}>
+                                📋 Esta entrada se vinculará con el turno completado
+                            </Text>
+                        </View>
+                    )}
 
                     {/* ── Campo: Nota clínica ── */}
                     <View style={styles.fieldGroup}>
@@ -250,5 +265,20 @@ const styles = StyleSheet.create({
     },
     cancelButtonText: {
         ...theme.commonStyles.buttonSecondaryText,
+    },
+    // ── Turno Link Banner ──
+    turnoLinkBanner: {
+        backgroundColor: theme.colors.infoLight,
+        padding: theme.spacing.m,
+        borderRadius: theme.borderRadius.m,
+        marginBottom: theme.spacing.l,
+        borderLeftWidth: 3,
+        borderLeftColor: theme.colors.info,
+    },
+    turnoLinkBannerText: {
+        fontFamily: theme.typography.primary,
+        fontSize: theme.typography.sizes.s,
+        color: theme.colors.info,
+        lineHeight: 20,
     },
 });

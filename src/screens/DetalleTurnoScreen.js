@@ -260,11 +260,28 @@ export default function DetalleTurnoScreen({ route, navigation }) {
                             const pacNombre = turno.pacienteNombre || 'Paciente';
                             if (nuevoEstado === 'completado') {
                                 await notifyTurnoCompletado(pacNombre);
+                                // Ofrecer registrar evolución en historia clínica
+                                Alert.alert(
+                                    '🏁 Turno completado',
+                                    '¿Querés registrar los avances de esta visita en la historia clínica del paciente?',
+                                    [
+                                        { text: 'Después', style: 'cancel' },
+                                        {
+                                            text: 'Sí, registrar',
+                                            onPress: () => {
+                                                navigation.navigate('NuevaEntradaHistoria', {
+                                                    pacienteId: turno.paciente_id,
+                                                    pacienteNombre: turno.pacienteNombre || 'Paciente',
+                                                    turnoId: turnoId,  // Vincula la entrada con este turno
+                                                });
+                                            },
+                                        },
+                                    ]
+                                );
                             } else if (nuevoEstado === 'cancelado') {
                                 await notifyTurnoCancelado(pacNombre, turnoId);
+                                Alert.alert('✅ Listo', `El turno fue cancelado exitosamente.`);
                             }
-
-                            Alert.alert('✅ Listo', `El turno fue ${nuevoEstado} exitosamente.`);
                         } catch (error) {
                             Alert.alert('Error', `No se pudo ${accion.toLowerCase()} el turno.`);
                         } finally {
@@ -476,6 +493,23 @@ export default function DetalleTurnoScreen({ route, navigation }) {
                                     Este turno ya fue {turno.estado}.
                                 </Text>
                             </View>
+                        )}
+
+                        {/* Registrar evolución (solo si está completado) */}
+                        {turno.estado === 'completado' && turno.paciente_id && (
+                            <TouchableOpacity
+                                style={[styles.actionButton, { backgroundColor: theme.colors.accent }]}
+                                onPress={() => {
+                                    navigation.navigate('NuevaEntradaHistoria', {
+                                        pacienteId: turno.paciente_id,
+                                        pacienteNombre: turno.pacienteNombre || 'Paciente',
+                                        turnoId: turnoId,
+                                    });
+                                }}
+                            >
+                                <Text style={styles.actionButtonText}>📝 Registrar Evolución</Text>
+                                <Text style={styles.actionButtonSubtext}>Agregar avances a la historia clínica</Text>
+                            </TouchableOpacity>
                         )}
 
                         {/* Eliminar turno (solo si está cancelado o completado) */}

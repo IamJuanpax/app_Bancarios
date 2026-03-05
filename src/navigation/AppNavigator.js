@@ -111,7 +111,7 @@ export default function AppNavigator({ navigationRef }) {
             <Stack.Screen
               name="NuevaEntradaHistoria"
               component={NuevaEntradaHistoriaScreen}
-              options={{ title: 'Nueva Entrada' }}
+              options={{ title: 'Nueva Evolución' }}
             />
 
             {/* ── Flujo de Turnos ── */}

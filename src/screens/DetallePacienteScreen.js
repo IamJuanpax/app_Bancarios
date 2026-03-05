@@ -11,9 +11,9 @@
  *   - Validación de cercanía (400m) usando GPS + Haversine
  *   - Botones de editar/eliminar (solo admin)
  * 
- * La historia clínica se almacena como documentos independientes
- * en la colección "historia_clinica" (no como sub-array del paciente),
- * para mejor escalabilidad (CONTEXT.md §4).
+ * La historia clínica se almacena como subcolección dentro
+ * de cada paciente: pacientes/{id}/historia_clinica/{entradaId}
+ * para mejor escalabilidad y ahorro en lecturas (CONTEXT.md §4).
  * 
  * La validación de cercanía (FR3) bloquea la posibilidad de
  * agregar entradas si el médico está a más de 400 metros.
@@ -295,7 +295,16 @@ export default function DetallePacienteScreen({ route, navigation }) {
 
                 {/* ── Historia Clínica ── */}
                 <View style={styles.sectionHeader}>
-                    <Text style={styles.sectionTitle}>Historia Clínica</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <Text style={styles.sectionTitle}>Historia Clínica</Text>
+                        {historia.length > 0 && (
+                            <View style={styles.entryCountBadge}>
+                                <Text style={styles.entryCountText}>
+                                    {historia.length} {historia.length === 1 ? 'visita' : 'visitas'}
+                                </Text>
+                            </View>
+                        )}
+                    </View>
                     <TouchableOpacity
                         style={[
                             styles.addEntryButton,
@@ -321,10 +330,17 @@ export default function DetallePacienteScreen({ route, navigation }) {
                     </TouchableOpacity>
                 </View>
 
-                {/* Entradas de historia clínica */}
+                {/* Entradas de historia clínica (subcolección) */}
                 {historia.length > 0 ? (
-                    historia.map((entrada) => (
+                    historia.map((entrada, index) => (
                         <View key={entrada.id} style={styles.historiaCard}>
+                            {/* Número de visita (cronológico inverso) */}
+                            <View style={styles.visitNumberBadge}>
+                                <Text style={styles.visitNumberText}>
+                                    Visita #{historia.length - index}
+                                </Text>
+                            </View>
+
                             {/* Fecha y médico */}
                             <View style={styles.historiaHeader}>
                                 <Text style={styles.historiaDate}>{formatDate(entrada.fecha)}</Text>
@@ -343,13 +359,26 @@ export default function DetallePacienteScreen({ route, navigation }) {
                                     <Text style={styles.progresoText}>{entrada.progreso}</Text>
                                 </View>
                             )}
+
+                            {/* Indicador de turno vinculado */}
+                            {entrada.turnoId && (
+                                <TouchableOpacity
+                                    style={styles.turnoLinkContainer}
+                                    onPress={() => navigation.navigate('DetalleTurno', { turnoId: entrada.turnoId })}
+                                >
+                                    <Text style={styles.turnoLinkText}>
+                                        📋 Ver turno vinculado →
+                                    </Text>
+                                </TouchableOpacity>
+                            )}
                         </View>
                     ))
                 ) : (
                     <View style={styles.emptyHistoria}>
                         <Text style={styles.emptyHistoriaIcon}>📋</Text>
                         <Text style={styles.emptyHistoriaText}>
-                            No hay entradas en la historia clínica
+                            No hay entradas en la historia clínica.{'\n'}
+                            Agregá la primera visita para comenzar el seguimiento.
                         </Text>
                     </View>
                 )}
@@ -615,5 +644,45 @@ const styles = StyleSheet.create({
         fontSize: theme.typography.sizes.m,
         color: theme.colors.textLight,
         textAlign: 'center',
+        lineHeight: 22,
+    },
+    // ── Entry Count Badge ──
+    entryCountBadge: {
+        backgroundColor: theme.colors.accent + '20',
+        paddingVertical: 2,
+        paddingHorizontal: theme.spacing.s,
+        borderRadius: theme.borderRadius.full,
+        marginLeft: theme.spacing.s,
+    },
+    entryCountText: {
+        fontFamily: theme.typography.primaryBold,
+        fontSize: theme.typography.sizes.xs,
+        color: theme.colors.accentDark,
+    },
+    // ── Visit Number Badge ──
+    visitNumberBadge: {
+        alignSelf: 'flex-start',
+        backgroundColor: theme.colors.primary + '10',
+        paddingVertical: 2,
+        paddingHorizontal: theme.spacing.s,
+        borderRadius: theme.borderRadius.s,
+        marginBottom: theme.spacing.s,
+    },
+    visitNumberText: {
+        fontFamily: theme.typography.primaryBold,
+        fontSize: theme.typography.sizes.xs,
+        color: theme.colors.primary,
+    },
+    // ── Turno Link ──
+    turnoLinkContainer: {
+        marginTop: theme.spacing.s,
+        paddingTop: theme.spacing.s,
+        borderTopWidth: 1,
+        borderTopColor: theme.colors.border,
+    },
+    turnoLinkText: {
+        fontFamily: theme.typography.primaryBold,
+        fontSize: theme.typography.sizes.xs,
+        color: theme.colors.info,
     },
 });
