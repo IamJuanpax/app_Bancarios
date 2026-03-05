@@ -12,11 +12,13 @@
  * 
  * Features:
  *   - Información completa del turno (paciente, fecha, notas)
+ *   - **VALIDACIÓN DE PROXIMIDAD (400m)** al aceptar turno (FR3)
  *   - Botones de acción según el estado actual:
- *     · Si pendiente  → "Aceptar" o "Cancelar"
+ *     · Si pendiente  → "Aceptar" (con validación GPS) o "Cancelar"
  *     · Si aceptado   → "Completar" o "Cancelar"
  *     · Si completado → Sin acciones (estado final)
  *   - Confirmación antes de cambiar estado
+ *   - Muestra distancia al paciente en tiempo real
  */
 
 import React, { useState, useEffect } from 'react';
@@ -30,12 +32,18 @@ import {
     ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import * as Location from 'expo-location';
 import { theme } from '../theme';
 import { useAuth } from '../context/AuthContext';
 import { updateEstadoTurno } from '../services/turnos';
+import { getPacienteById } from '../services/pacientes';
+import { calculateDistance, isWithinRange, formatDistance } from '../utils/haversine';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import LoadingSpinner from '../components/LoadingSpinner';
+
+// Distancia máxima permitida para aceptar un turno (en metros)
+const MAX_DISTANCE_METERS = 400;
 
 // Configuración visual por estado
 const STATUS_CONFIG = {
@@ -51,21 +59,33 @@ export default function DetalleTurnoScreen({ route, navigation }) {
 
     // ── Estado ──
     const [turno, setTurno] = useState(null);
+    const [paciente, setPaciente] = useState(null);
     const [loading, setLoading] = useState(true);
     const [actionLoading, setActionLoading] = useState(false);
+    // Estado de proximidad
+    const [distancia, setDistancia] = useState(null);       // Distancia en metros
+    const [dentroDeRango, setDentroDeRango] = useState(null); // true/false/null
+    const [checkingProximity, setCheckingProximity] = useState(false);
 
     useEffect(() => {
         loadTurno();
     }, [turnoId]);
 
     /**
-     * Carga los datos del turno desde Firestore.
+     * Carga los datos del turno y del paciente asociado desde Firestore.
      */
     const loadTurno = async () => {
         try {
             const turnoDoc = await getDoc(doc(db, 'turnos', turnoId));
             if (turnoDoc.exists()) {
-                setTurno({ id: turnoDoc.id, ...turnoDoc.data() });
+                const turnoData = { id: turnoDoc.id, ...turnoDoc.data() };
+                setTurno(turnoData);
+
+                // Cargar datos del paciente para obtener sus coordenadas
+                if (turnoData.paciente_id) {
+                    const pacienteData = await getPacienteById(turnoData.paciente_id);
+                    setPaciente(pacienteData);
+                }
             }
         } catch (error) {
             console.error('Error al cargar turno:', error);
@@ -75,7 +95,116 @@ export default function DetalleTurnoScreen({ route, navigation }) {
     };
 
     /**
-     * Cambia el estado del turno con confirmación.
+     * Verifica la proximidad del médico al paciente.
+     * Obtiene la ubicación GPS actual y calcula la distancia con Haversine.
+     * 
+     * @returns {{ enRango: boolean, distancia: number } | null}
+     */
+    const verificarProximidad = async () => {
+        setCheckingProximity(true);
+        try {
+            // 1. Pedir permisos de ubicación
+            const { status } = await Location.requestForegroundPermissionsAsync();
+            if (status !== 'granted') {
+                Alert.alert(
+                    '📍 Permiso denegado',
+                    'Se necesita acceso a la ubicación para verificar la proximidad al paciente.'
+                );
+                return null;
+            }
+
+            // 2. Obtener ubicación actual del médico
+            const location = await Location.getCurrentPositionAsync({
+                accuracy: Location.Accuracy.High,
+            });
+            const medicoLat = location.coords.latitude;
+            const medicoLon = location.coords.longitude;
+
+            // 3. Obtener coordenadas del paciente
+            if (!paciente?.coordenadas?.lat || !paciente?.coordenadas?.lng) {
+                Alert.alert(
+                    '⚠️ Sin coordenadas',
+                    'El paciente no tiene coordenadas GPS cargadas. Editá su perfil para agregar ubicación.'
+                );
+                return null;
+            }
+
+            const pacienteLat = paciente.coordenadas.lat;
+            const pacienteLon = paciente.coordenadas.lng;
+
+            // 4. Calcular distancia con Haversine (FR3, costo $0)
+            const dist = calculateDistance(medicoLat, medicoLon, pacienteLat, pacienteLon);
+            const enRango = dist <= MAX_DISTANCE_METERS;
+
+            // Actualizar estado visual
+            setDistancia(dist);
+            setDentroDeRango(enRango);
+
+            return { enRango, distancia: dist };
+        } catch (error) {
+            console.error('Error al verificar proximidad:', error);
+            Alert.alert('Error', 'No se pudo obtener tu ubicación. Intentá de nuevo.');
+            return null;
+        } finally {
+            setCheckingProximity(false);
+        }
+    };
+
+    /**
+     * Maneja la aceptación del turno con validación de proximidad.
+     * PRIMERO verifica que el médico esté a ≤400m del paciente (FR3).
+     */
+    const handleAceptarTurno = async () => {
+        setActionLoading(true);
+
+        // Paso 1: Verificar proximidad
+        const resultado = await verificarProximidad();
+
+        if (!resultado) {
+            setActionLoading(false);
+            return; // Error al verificar, ya se mostró alerta
+        }
+
+        if (!resultado.enRango) {
+            // ❌ Fuera de rango → Bloquear
+            setActionLoading(false);
+            Alert.alert(
+                '🚫 Fuera de rango',
+                `Estás a ${formatDistance(resultado.distancia)} del paciente.\n\n` +
+                `La distancia máxima permitida es ${formatDistance(MAX_DISTANCE_METERS)}.\n\n` +
+                `Debés estar a menos de 400 metros del paciente para aceptar el turno.`,
+                [{ text: 'Entendido' }]
+            );
+            return;
+        }
+
+        // ✅ Dentro de rango → Confirmar aceptación
+        Alert.alert(
+            '✅ Dentro de rango',
+            `Estás a ${formatDistance(resultado.distancia)} del paciente.\n\n¿Querés aceptar este turno?`,
+            [
+                { text: 'No', style: 'cancel', onPress: () => setActionLoading(false) },
+                {
+                    text: 'Sí, aceptar',
+                    onPress: async () => {
+                        try {
+                            await updateEstadoTurno(turnoId, 'aceptado');
+                            setTurno(prev => ({ ...prev, estado: 'aceptado' }));
+                            Alert.alert('✅ Turno aceptado', 'El turno fue aceptado exitosamente.');
+                        } catch (error) {
+                            Alert.alert('Error', 'No se pudo aceptar el turno.');
+                        } finally {
+                            setActionLoading(false);
+                        }
+                    },
+                },
+            ]
+        );
+    };
+
+    /**
+     * Cambia el estado del turno con confirmación (para cancelar/completar).
+     * NO requiere validación de proximidad.
      * @param {string} nuevoEstado - El nuevo estado a asignar
      * @param {string} accion - Texto descriptivo de la acción (para el Alert)
      */
@@ -91,7 +220,6 @@ export default function DetalleTurnoScreen({ route, navigation }) {
                         setActionLoading(true);
                         try {
                             await updateEstadoTurno(turnoId, nuevoEstado);
-                            // Actualizar estado local sin re-consultar Firestore
                             setTurno(prev => ({ ...prev, estado: nuevoEstado }));
                             Alert.alert('✅ Listo', `El turno fue ${nuevoEstado} exitosamente.`);
                         } catch (error) {
@@ -168,6 +296,17 @@ export default function DetalleTurnoScreen({ route, navigation }) {
                         </View>
                     </View>
 
+                    {/* Dirección del paciente */}
+                    {paciente?.direccion && (
+                        <View style={styles.infoRow}>
+                            <Text style={styles.infoIcon}>📍</Text>
+                            <View>
+                                <Text style={styles.infoLabel}>Dirección del paciente</Text>
+                                <Text style={styles.infoValue}>{paciente.direccion}</Text>
+                            </View>
+                        </View>
+                    )}
+
                     {/* Médico */}
                     <View style={styles.infoRow}>
                         <Text style={styles.infoIcon}>👨‍⚕️</Text>
@@ -186,19 +325,73 @@ export default function DetalleTurnoScreen({ route, navigation }) {
                     ) : null}
                 </View>
 
+                {/* ── Card de Proximidad (solo si el turno es pendiente o ya se verificó) ── */}
+                {turno.estado === 'pendiente' && (
+                    <View style={styles.proximityCard}>
+                        <Text style={styles.proximityTitle}>📡 Proximidad al Paciente</Text>
+                        <Text style={styles.proximityDesc}>
+                            Para aceptar este turno debés estar a menos de {formatDistance(MAX_DISTANCE_METERS)} del paciente.
+                        </Text>
+
+                        {/* Resultado de la verificación */}
+                        {distancia !== null && (
+                            <View style={[
+                                styles.proximityResult,
+                                { backgroundColor: dentroDeRango ? '#E8F5E9' : '#FFEBEE' }
+                            ]}>
+                                <Text style={[
+                                    styles.proximityDistance,
+                                    { color: dentroDeRango ? '#2E7D32' : '#C62828' }
+                                ]}>
+                                    {dentroDeRango ? '🟢' : '🔴'} {formatDistance(distancia)}
+                                </Text>
+                                <Text style={[
+                                    styles.proximityStatus,
+                                    { color: dentroDeRango ? '#2E7D32' : '#C62828' }
+                                ]}>
+                                    {dentroDeRango
+                                        ? 'Estás dentro del rango permitido'
+                                        : `Fuera de rango (máximo: ${formatDistance(MAX_DISTANCE_METERS)})`}
+                                </Text>
+                            </View>
+                        )}
+
+                        {/* Botón para verificar proximidad sin aceptar */}
+                        <TouchableOpacity
+                            style={styles.checkProximityButton}
+                            onPress={verificarProximidad}
+                            disabled={checkingProximity}
+                        >
+                            {checkingProximity ? (
+                                <ActivityIndicator color={theme.colors.info} size="small" />
+                            ) : (
+                                <Text style={styles.checkProximityText}>
+                                    📍 {distancia !== null ? 'Verificar de nuevo' : 'Verificar mi distancia'}
+                                </Text>
+                            )}
+                        </TouchableOpacity>
+                    </View>
+                )}
+
                 {/* ── Botones de Acción ── */}
                 {actionLoading ? (
-                    <ActivityIndicator size="large" color={theme.colors.accent} style={{ marginTop: theme.spacing.xl }} />
+                    <View style={styles.loadingActionContainer}>
+                        <ActivityIndicator size="large" color={theme.colors.accent} />
+                        <Text style={styles.loadingActionText}>
+                            {checkingProximity ? 'Verificando ubicación...' : 'Procesando...'}
+                        </Text>
+                    </View>
                 ) : (
                     <View style={styles.actionsContainer}>
-                        {/* Si el turno está PENDIENTE → Aceptar o Cancelar */}
+                        {/* Si el turno está PENDIENTE → Aceptar (con validación GPS) o Cancelar */}
                         {turno.estado === 'pendiente' && (
                             <>
                                 <TouchableOpacity
                                     style={[styles.actionButton, { backgroundColor: theme.colors.info }]}
-                                    onPress={() => handleCambiarEstado('aceptado', 'Aceptar')}
+                                    onPress={handleAceptarTurno}
                                 >
                                     <Text style={styles.actionButtonText}>✅ Aceptar Turno</Text>
+                                    <Text style={styles.actionButtonSubtext}>Se verificará tu ubicación</Text>
                                 </TouchableOpacity>
 
                                 <TouchableOpacity
@@ -342,10 +535,72 @@ const styles = StyleSheet.create({
         color: theme.colors.text,
         lineHeight: 22,
     },
+    // ── Proximity Card ──
+    proximityCard: {
+        backgroundColor: theme.colors.white,
+        borderRadius: theme.borderRadius.l,
+        padding: theme.spacing.l,
+        marginBottom: theme.spacing.l,
+        borderWidth: 1,
+        borderColor: theme.colors.border,
+        ...theme.shadows.medium,
+    },
+    proximityTitle: {
+        fontFamily: theme.typography.secondaryBold,
+        fontSize: theme.typography.sizes.l,
+        color: theme.colors.primary,
+        marginBottom: theme.spacing.s,
+    },
+    proximityDesc: {
+        fontFamily: theme.typography.primary,
+        fontSize: theme.typography.sizes.s,
+        color: theme.colors.textLight,
+        marginBottom: theme.spacing.m,
+        lineHeight: 20,
+    },
+    proximityResult: {
+        padding: theme.spacing.m,
+        borderRadius: theme.borderRadius.m,
+        alignItems: 'center',
+        marginBottom: theme.spacing.m,
+    },
+    proximityDistance: {
+        fontFamily: theme.typography.secondaryBold,
+        fontSize: theme.typography.sizes.xxl,
+        marginBottom: theme.spacing.xs,
+    },
+    proximityStatus: {
+        fontFamily: theme.typography.primary,
+        fontSize: theme.typography.sizes.s,
+        textAlign: 'center',
+    },
+    checkProximityButton: {
+        alignItems: 'center',
+        paddingVertical: theme.spacing.s,
+        borderTopWidth: 1,
+        borderTopColor: theme.colors.border,
+        paddingTop: theme.spacing.m,
+    },
+    checkProximityText: {
+        fontFamily: theme.typography.primaryBold,
+        fontSize: theme.typography.sizes.s,
+        color: theme.colors.info,
+    },
     // ── Actions ──
     actionsContainer: {
         gap: theme.spacing.m,
         marginBottom: theme.spacing.l,
+    },
+    loadingActionContainer: {
+        alignItems: 'center',
+        marginTop: theme.spacing.xl,
+        marginBottom: theme.spacing.l,
+    },
+    loadingActionText: {
+        fontFamily: theme.typography.primary,
+        fontSize: theme.typography.sizes.s,
+        color: theme.colors.textLight,
+        marginTop: theme.spacing.s,
     },
     actionButton: {
         paddingVertical: theme.spacing.m,
@@ -358,6 +613,12 @@ const styles = StyleSheet.create({
         fontFamily: theme.typography.primaryBold,
         fontSize: theme.typography.sizes.m,
         color: theme.colors.white,
+    },
+    actionButtonSubtext: {
+        fontFamily: theme.typography.primary,
+        fontSize: theme.typography.sizes.xs,
+        color: 'rgba(255,255,255,0.75)',
+        marginTop: 2,
     },
     finalStateBanner: {
         backgroundColor: theme.colors.backgroundDark,
