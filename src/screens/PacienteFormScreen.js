@@ -36,10 +36,11 @@ import {
     Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import * as Location from 'expo-location';
 import { theme } from '../theme';
 import { useAuth } from '../context/AuthContext';
 import { createPaciente, updatePaciente, getPacienteById } from '../services/pacientes';
-import { geocodeAddressVerbose } from '../utils/geocoding';
+import { geocodeAddressVerbose, reverseGeocode } from '../utils/geocoding';
 
 export default function PacienteFormScreen({ route, navigation }) {
     // Si viene pacienteId en params → modo edición
@@ -55,6 +56,8 @@ export default function PacienteFormScreen({ route, navigation }) {
     const [isLoading, setIsLoading] = useState(false);
     const [isLoadingData, setIsLoadingData] = useState(isEditing);
     const [geocodingStatus, setGeocodingStatus] = useState(null); // null | 'loading' | 'success' | 'error'
+    const [gettingLocation, setGettingLocation] = useState(false);
+    const [coordsFromGPS, setCoordsFromGPS] = useState(null); // Si se obtuvo coords del GPS, las guardamos acá
 
     /**
      * Si estamos en modo edición, cargar los datos existentes del paciente.
@@ -81,6 +84,51 @@ export default function PacienteFormScreen({ route, navigation }) {
     };
 
     /**
+     * Obtiene la ubicación actual del dispositivo y rellena la dirección.
+     * Usa reverse geocoding para convertir coords → dirección.
+     */
+    const handleUsarUbicacionActual = async () => {
+        setGettingLocation(true);
+        try {
+            // Pedir permisos
+            const { status } = await Location.requestForegroundPermissionsAsync();
+            if (status !== 'granted') {
+                Alert.alert('Permiso denegado', 'Necesitamos acceso a tu ubicación para obtener la dirección.');
+                return;
+            }
+
+            // Obtener coordenadas GPS
+            const location = await Location.getCurrentPositionAsync({
+                accuracy: Location.Accuracy.High,
+            });
+            const lat = location.coords.latitude;
+            const lng = location.coords.longitude;
+
+            // Reverse geocoding: coords → dirección
+            const result = await reverseGeocode(lat, lng);
+
+            if (result) {
+                setDireccion(result.direccion);
+                setCoordsFromGPS({ lat, lng });
+                Alert.alert('✅ Ubicación obtenida', `Dirección: ${result.direccion}`);
+            } else {
+                // Si el reverse geocoding falla, igual guardamos las coords
+                setCoordsFromGPS({ lat, lng });
+                setDireccion(`Lat: ${lat.toFixed(6)}, Lng: ${lng.toFixed(6)}`);
+                Alert.alert(
+                    '⚠️ Dirección no disponible',
+                    'Se obtuvieron las coordenadas GPS pero no se pudo convertir a dirección. Podés editar el campo manualmente.'
+                );
+            }
+        } catch (error) {
+            console.error('Error al obtener ubicación:', error);
+            Alert.alert('Error', 'No se pudo obtener la ubicación. Verificá que el GPS esté activado.');
+        } finally {
+            setGettingLocation(false);
+        }
+    };
+
+    /**
      * Valida los campos, geocodifica la dirección y guarda el paciente.
      */
     const handleSave = async () => {
@@ -95,37 +143,42 @@ export default function PacienteFormScreen({ route, navigation }) {
         }
 
         setIsLoading(true);
-        setGeocodingStatus('loading');
 
         try {
-            // 1. Geocodificar la dirección para obtener coordenadas
-            const geoResult = await geocodeAddressVerbose(direccion.trim());
-
             let coordenadas = { lat: 0, lng: 0 };
 
-            if (geoResult) {
-                coordenadas = { lat: geoResult.lat, lng: geoResult.lng };
+            // Si ya tenemos coords del GPS, usarlas directamente (sin geocoding extra)
+            if (coordsFromGPS) {
+                coordenadas = coordsFromGPS;
                 setGeocodingStatus('success');
             } else {
-                setGeocodingStatus('error');
-                // Preguntar si quiere guardar sin coordenadas
-                const continuar = await new Promise((resolve) => {
-                    Alert.alert(
-                        '⚠️ Dirección no encontrada',
-                        'No se pudo obtener la ubicación GPS de esta dirección. ' +
-                        'El paciente se guardará sin coordenadas, pero no se podrá validar la proximidad (400m) hasta que se corrija la dirección.\n\n' +
-                        '¿Querés guardar de todas formas?',
-                        [
-                            { text: 'Cancelar', style: 'cancel', onPress: () => resolve(false) },
-                            { text: 'Guardar sin ubicación', onPress: () => resolve(true) },
-                        ]
-                    );
-                });
+                // Geocodificar la dirección para obtener coordenadas
+                setGeocodingStatus('loading');
+                const geoResult = await geocodeAddressVerbose(direccion.trim());
 
-                if (!continuar) {
-                    setIsLoading(false);
-                    setGeocodingStatus(null);
-                    return;
+                if (geoResult) {
+                    coordenadas = { lat: geoResult.lat, lng: geoResult.lng };
+                    setGeocodingStatus('success');
+                } else {
+                    setGeocodingStatus('error');
+                    const continuar = await new Promise((resolve) => {
+                        Alert.alert(
+                            '⚠️ Dirección no encontrada',
+                            'No se pudo obtener la ubicación GPS de esta dirección. ' +
+                            'El paciente se guardará sin coordenadas, pero no se podrá validar la proximidad (400m) hasta que se corrija la dirección.\n\n' +
+                            '¿Querés guardar de todas formas?',
+                            [
+                                { text: 'Cancelar', style: 'cancel', onPress: () => resolve(false) },
+                                { text: 'Guardar sin ubicación', onPress: () => resolve(true) },
+                            ]
+                        );
+                    });
+
+                    if (!continuar) {
+                        setIsLoading(false);
+                        setGeocodingStatus(null);
+                        return;
+                    }
                 }
             }
 
@@ -205,11 +258,45 @@ export default function PacienteFormScreen({ route, navigation }) {
                             placeholder="Ej: Av. Corrientes 1234, CABA"
                             placeholderTextColor={theme.colors.textMuted}
                             value={direccion}
-                            onChangeText={setDireccion}
+                            onChangeText={(text) => {
+                                setDireccion(text);
+                                // Si el usuario edita la dirección manualmente, limpiar coords del GPS
+                                if (coordsFromGPS) setCoordsFromGPS(null);
+                            }}
                         />
-                        <Text style={styles.fieldHint}>
-                            📍 La ubicación en el mapa se obtendrá automáticamente de la dirección
-                        </Text>
+
+                        {/* Botón: Usar ubicación actual */}
+                        <TouchableOpacity
+                            style={styles.locationButton}
+                            onPress={handleUsarUbicacionActual}
+                            disabled={gettingLocation}
+                        >
+                            {gettingLocation ? (
+                                <View style={styles.locationButtonRow}>
+                                    <ActivityIndicator size="small" color={theme.colors.info} />
+                                    <Text style={[styles.locationButtonText, { color: theme.colors.info }]}>
+                                        Obteniendo ubicación...
+                                    </Text>
+                                </View>
+                            ) : (
+                                <View style={styles.locationButtonRow}>
+                                    <Text style={styles.locationButtonIcon}>📍</Text>
+                                    <Text style={styles.locationButtonText}>Usar ubicación actual</Text>
+                                </View>
+                            )}
+                        </TouchableOpacity>
+
+                        {coordsFromGPS && (
+                            <Text style={styles.fieldHintSuccess}>
+                                ✅ Coordenadas obtenidas del GPS ({coordsFromGPS.lat.toFixed(4)}, {coordsFromGPS.lng.toFixed(4)})
+                            </Text>
+                        )}
+
+                        {!coordsFromGPS && (
+                            <Text style={styles.fieldHint}>
+                                📍 La ubicación se obtendrá automáticamente al guardar
+                            </Text>
+                        )}
                     </View>
 
                     {/* ── Campo: Teléfono ── */}
@@ -334,6 +421,37 @@ const styles = StyleSheet.create({
         color: theme.colors.textMuted,
         marginTop: theme.spacing.xs,
         marginLeft: theme.spacing.xs,
+    },
+    fieldHintSuccess: {
+        fontFamily: theme.typography.primary,
+        fontSize: theme.typography.sizes.xs,
+        color: theme.colors.success,
+        marginTop: theme.spacing.xs,
+        marginLeft: theme.spacing.xs,
+    },
+    // ── Location Button ──
+    locationButton: {
+        marginTop: theme.spacing.s,
+        paddingVertical: theme.spacing.s + 2,
+        paddingHorizontal: theme.spacing.m,
+        backgroundColor: theme.colors.infoLight,
+        borderRadius: theme.borderRadius.m,
+        borderWidth: 1,
+        borderColor: theme.colors.info + '40',
+    },
+    locationButtonRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: theme.spacing.s,
+    },
+    locationButtonIcon: {
+        fontSize: 16,
+    },
+    locationButtonText: {
+        fontFamily: theme.typography.primaryBold,
+        fontSize: theme.typography.sizes.s,
+        color: theme.colors.info,
     },
     // ── Geocoding status ──
     geocodingBanner: {

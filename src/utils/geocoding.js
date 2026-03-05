@@ -18,7 +18,8 @@
  * Para nuestro caso (cargar pacientes de a uno) es perfecto.
  */
 
-const NOMINATIM_URL = 'https://nominatim.openstreetmap.org/search';
+const NOMINATIM_SEARCH_URL = 'https://nominatim.openstreetmap.org/search';
+const NOMINATIM_REVERSE_URL = 'https://nominatim.openstreetmap.org/reverse';
 
 /**
  * Geocodifica una dirección (string) a coordenadas GPS.
@@ -49,7 +50,7 @@ export const geocodeAddress = async (direccion) => {
             countrycodes: 'ar',  // Priorizar Argentina
         });
 
-        const response = await fetch(`${NOMINATIM_URL}?${params.toString()}`, {
+        const response = await fetch(`${NOMINATIM_SEARCH_URL}?${params.toString()}`, {
             headers: {
                 'User-Agent': 'RehabMobile/1.0 (app-medica)',
                 'Accept-Language': 'es',
@@ -101,7 +102,7 @@ export const geocodeAddressVerbose = async (direccion) => {
             countrycodes: 'ar',
         });
 
-        const response = await fetch(`${NOMINATIM_URL}?${params.toString()}`, {
+        const response = await fetch(`${NOMINATIM_SEARCH_URL}?${params.toString()}`, {
             headers: {
                 'User-Agent': 'RehabMobile/1.0 (app-medica)',
                 'Accept-Language': 'es',
@@ -127,3 +128,64 @@ export const geocodeAddressVerbose = async (direccion) => {
         return null;
     }
 };
+
+/**
+ * Reverse geocoding: convierte coordenadas GPS a una dirección legible.
+ * Útil para el botón "Usar ubicación actual" en el formulario de pacientes.
+ * 
+ * @param {number} lat - Latitud
+ * @param {number} lng - Longitud
+ * @returns {Promise<{ direccion: string, direccionCompleta: string } | null>}
+ * 
+ * @example
+ * const result = await reverseGeocode(-34.6037, -58.3816);
+ * // { direccion: 'Av. 9 de Julio 1100, San Nicolás, CABA', direccionCompleta: '...' }
+ */
+export const reverseGeocode = async (lat, lng) => {
+    try {
+        const params = new URLSearchParams({
+            lat: lat.toString(),
+            lon: lng.toString(),
+            format: 'json',
+            addressdetails: '1',
+            zoom: '18',
+        });
+
+        const response = await fetch(`${NOMINATIM_REVERSE_URL}?${params.toString()}`, {
+            headers: {
+                'User-Agent': 'RehabMobile/1.0 (app-medica)',
+                'Accept-Language': 'es',
+            },
+        });
+
+        if (!response.ok) return null;
+
+        const result = await response.json();
+
+        if (result && result.address) {
+            const addr = result.address;
+            // Construir dirección legible: "Calle Número, Barrio, Ciudad"
+            const parts = [];
+            if (addr.road) {
+                parts.push(addr.house_number ? `${addr.road} ${addr.house_number}` : addr.road);
+            }
+            if (addr.suburb || addr.neighbourhood) {
+                parts.push(addr.suburb || addr.neighbourhood);
+            }
+            if (addr.city || addr.town || addr.village) {
+                parts.push(addr.city || addr.town || addr.village);
+            }
+
+            return {
+                direccion: parts.join(', ') || result.display_name,
+                direccionCompleta: result.display_name,
+            };
+        }
+
+        return null;
+    } catch (error) {
+        console.error('Error en reverse geocoding:', error);
+        return null;
+    }
+};
+
