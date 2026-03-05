@@ -32,6 +32,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { theme } from '../theme';
 import { useAuth } from '../context/AuthContext';
+import { useNotifications } from '../context/NotificationContext';
 import { getPacientes } from '../services/pacientes';
 import { createTurno } from '../services/turnos';
 
@@ -41,6 +42,7 @@ export default function CrearTurnoScreen({ route, navigation }) {
     const preselectedPacienteNombre = route?.params?.pacienteNombre;
 
     const { user } = useAuth();
+    const { notifyTurnoCreado, scheduleReminder } = useNotifications();
 
     // ── Estado ──
     const [pacientes, setPacientes] = useState([]);
@@ -177,6 +179,10 @@ export default function CrearTurnoScreen({ route, navigation }) {
                 fecha_hora: fechaHora,
                 notas: notas.trim(),
             });
+
+            // 📩 Notificar que se creó el turno (notificación local)
+            await notifyTurnoCreado(pacienteNombre, fechaHora);
+
             Alert.alert('✅ Turno creado', 'El turno se programó exitosamente.');
             navigation.goBack();
         } catch (error) {

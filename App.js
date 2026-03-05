@@ -6,18 +6,20 @@
  * Responsabilidades:
  * 1. Cargar las fuentes personalizadas (Inter y Montserrat) con expo-font
  * 2. Envolver toda la app en el AuthProvider (contexto de autenticación)
- * 3. Mostrar un splash/spinner mientras se cargan las fuentes
- * 4. Renderizar el sistema de navegación principal
+ * 3. Envolver en NotificationProvider (notificaciones locales)
+ * 4. Mostrar un splash/spinner mientras se cargan las fuentes
+ * 5. Renderizar el sistema de navegación principal
  * 
  * Jerarquía de componentes:
  *   App
- *   └── AuthProvider          (Contexto de autenticación global)
- *       └── AppNavigator      (Sistema de navegación)
- *           ├── LoginScreen   (Si no está autenticado)
- *           └── [Stack]       (Si está autenticado)
+ *   └── AuthProvider               (Contexto de autenticación global)
+ *       └── NotificationProvider   (Notificaciones locales, costo $0)
+ *           └── AppNavigator       (Sistema de navegación)
+ *               ├── LoginScreen    (Si no está autenticado)
+ *               └── [Stack]        (Si está autenticado)
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import * as Font from 'expo-font';
@@ -30,13 +32,15 @@ import {
   Montserrat_700Bold,
 } from '@expo-google-fonts/montserrat';
 
-// Importar el contexto de autenticación y el navegador
+// Importar contextos y navegador
 import { AuthProvider } from './src/context/AuthContext';
+import { NotificationProvider } from './src/context/NotificationContext';
 import AppNavigator from './src/navigation/AppNavigator';
 import { theme } from './src/theme';
 
 export default function App() {
   const [fontsLoaded, setFontsLoaded] = useState(false);
+  const navigationRef = useRef(null);  // Ref para navegación desde notificaciones
 
   useEffect(() => {
     /**
@@ -81,9 +85,14 @@ export default function App() {
       {/* 
         AuthProvider envuelve toda la app para que cualquier componente
         pueda acceder al estado de autenticación con useAuth().
+        
+        NotificationProvider gestiona las notificaciones locales (costo $0).
+        Recibe navigationRef para deep-linking al tocar notificaciones.
       */}
       <AuthProvider>
-        <AppNavigator />
+        <NotificationProvider navigationRef={navigationRef}>
+          <AppNavigator navigationRef={navigationRef} />
+        </NotificationProvider>
       </AuthProvider>
     </>
   );

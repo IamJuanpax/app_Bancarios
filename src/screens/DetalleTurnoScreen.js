@@ -35,6 +35,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
 import { theme } from '../theme';
 import { useAuth } from '../context/AuthContext';
+import { useNotifications } from '../context/NotificationContext';
 import { updateEstadoTurno, deleteTurno } from '../services/turnos';
 import { getPacienteById } from '../services/pacientes';
 import { calculateDistance, isWithinRange, formatDistance } from '../utils/haversine';
@@ -56,6 +57,7 @@ const STATUS_CONFIG = {
 export default function DetalleTurnoScreen({ route, navigation }) {
     const { turnoId } = route.params;
     const { user, userRole, userName } = useAuth();
+    const { notifyTurnoAceptado, notifyTurnoCompletado, notifyTurnoCancelado, cancelReminder } = useNotifications();
 
     // ── Estado ──
     const [turno, setTurno] = useState(null);
@@ -213,7 +215,15 @@ export default function DetalleTurnoScreen({ route, navigation }) {
                                 medico_id: user?.uid || '',
                                 medicoNombre: nombreMedico,
                             }));
-                            Alert.alert('✅ Turno aceptado', 'El turno fue aceptado y asignado a tu nombre.');
+
+                            // 📩 Notificar aceptación + programar recordatorio automático
+                            await notifyTurnoAceptado(
+                                turno.pacienteNombre || 'Paciente',
+                                turno.fecha_hora,
+                                turnoId
+                            );
+
+                            Alert.alert('✅ Turno aceptado', 'El turno fue aceptado y se programó un recordatorio 1 hora antes.');
                         } catch (error) {
                             console.error('Error al aceptar turno:', error);
                             Alert.alert('Error', `No se pudo aceptar el turno: ${error.message}`);
@@ -245,6 +255,15 @@ export default function DetalleTurnoScreen({ route, navigation }) {
                         try {
                             await updateEstadoTurno(turnoId, nuevoEstado);
                             setTurno(prev => ({ ...prev, estado: nuevoEstado }));
+
+                            // 📩 Notificar según el nuevo estado
+                            const pacNombre = turno.pacienteNombre || 'Paciente';
+                            if (nuevoEstado === 'completado') {
+                                await notifyTurnoCompletado(pacNombre);
+                            } else if (nuevoEstado === 'cancelado') {
+                                await notifyTurnoCancelado(pacNombre, turnoId);
+                            }
+
                             Alert.alert('✅ Listo', `El turno fue ${nuevoEstado} exitosamente.`);
                         } catch (error) {
                             Alert.alert('Error', `No se pudo ${accion.toLowerCase()} el turno.`);

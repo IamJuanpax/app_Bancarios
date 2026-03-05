@@ -63,7 +63,7 @@ const defaultScreenOptions = {
   },
 };
 
-export default function AppNavigator() {
+export default function AppNavigator({ navigationRef }) {
   // Obtener estado de autenticación del contexto
   const { user, loading } = useAuth();
 
@@ -73,7 +73,7 @@ export default function AppNavigator() {
   }
 
   return (
-    <NavigationContainer>
+    <NavigationContainer ref={navigationRef}>
       <Stack.Navigator screenOptions={defaultScreenOptions}>
         {user ? (
           // ═══ USUARIO AUTENTICADO ═══
