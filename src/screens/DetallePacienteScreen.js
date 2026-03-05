@@ -4,7 +4,8 @@
  * ============================================================
  * 
  * Muestra todos los datos de un paciente específico, incluyendo:
- *   - Información personal (nombre, dirección, teléfono, coordenadas)
+ *   - Información personal (nombre, dirección, teléfono)
+ *   - **Mapa** con la ubicación del paciente (react-native-maps)
  *   - Historia clínica evolutiva (entradas ordenadas por fecha desc)
  *   - Botón para agregar nueva entrada de historia clínica
  *   - Validación de cercanía (400m) usando GPS + Haversine
@@ -27,16 +28,21 @@ import {
     StyleSheet,
     Alert,
     RefreshControl,
+    Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import * as Location from 'expo-location';
+import MapView, { Marker } from 'react-native-maps';
 import { theme } from '../theme';
 import { useAuth } from '../context/AuthContext';
 import { getPacienteById, deletePaciente } from '../services/pacientes';
 import { getHistoriaByPaciente } from '../services/historiaClinica';
 import { calculateDistance, isWithinRange } from '../utils/haversine';
 import LoadingSpinner from '../components/LoadingSpinner';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const MAP_HEIGHT = 200;
 
 export default function DetallePacienteScreen({ route, navigation }) {
     const { pacienteId } = route.params;
@@ -107,6 +113,11 @@ export default function DetallePacienteScreen({ route, navigation }) {
 
     // ¿El médico está dentro de los 400m? (FR3)
     const withinRange = distancia !== null && distancia <= 400;
+
+    // ¿El paciente tiene coordenadas válidas?
+    const hasValidCoords = paciente?.coordenadas &&
+        paciente.coordenadas.lat !== 0 &&
+        paciente.coordenadas.lng !== 0;
 
     /**
      * Elimina el paciente (solo admin puede hacerlo).
@@ -211,6 +222,49 @@ export default function DetallePacienteScreen({ route, navigation }) {
                         </View>
                     )}
                 </View>
+
+                {/* ── Mapa con la ubicación del paciente ── */}
+                {hasValidCoords && (
+                    <View style={styles.mapCard}>
+                        <Text style={styles.mapTitle}>📍 Ubicación del paciente</Text>
+                        <View style={styles.mapContainer}>
+                            <MapView
+                                style={styles.map}
+                                initialRegion={{
+                                    latitude: paciente.coordenadas.lat,
+                                    longitude: paciente.coordenadas.lng,
+                                    latitudeDelta: 0.005,
+                                    longitudeDelta: 0.005,
+                                }}
+                                scrollEnabled={false}
+                                zoomEnabled={false}
+                                rotateEnabled={false}
+                                pitchEnabled={false}
+                            >
+                                <Marker
+                                    coordinate={{
+                                        latitude: paciente.coordenadas.lat,
+                                        longitude: paciente.coordenadas.lng,
+                                    }}
+                                    title={paciente.nombre}
+                                    description={paciente.direccion}
+                                />
+                            </MapView>
+                        </View>
+                        <Text style={styles.mapCoords}>
+                            Lat: {paciente.coordenadas.lat.toFixed(4)}, Lng: {paciente.coordenadas.lng.toFixed(4)}
+                        </Text>
+                    </View>
+                )}
+
+                {!hasValidCoords && (
+                    <View style={styles.noMapBanner}>
+                        <Text style={styles.noMapIcon}>🗺️</Text>
+                        <Text style={styles.noMapText}>
+                            No se pudo obtener la ubicación de esta dirección. Editá el paciente para corregir la dirección.
+                        </Text>
+                    </View>
+                )}
 
                 {/* ── Acciones ── */}
                 <View style={styles.actions}>
@@ -369,6 +423,7 @@ const styles = StyleSheet.create({
         fontFamily: theme.typography.primary,
         fontSize: theme.typography.sizes.m,
         color: theme.colors.textLight,
+        flex: 1,
     },
     // ── Distance Banner ──
     distanceBanner: {
@@ -393,6 +448,55 @@ const styles = StyleSheet.create({
         flex: 1,
         fontFamily: theme.typography.primary,
         fontSize: theme.typography.sizes.s,
+    },
+    // ── Map ──
+    mapCard: {
+        backgroundColor: theme.colors.white,
+        borderRadius: theme.borderRadius.l,
+        padding: theme.spacing.m,
+        marginBottom: theme.spacing.m,
+        ...theme.shadows.medium,
+    },
+    mapTitle: {
+        fontFamily: theme.typography.secondaryBold,
+        fontSize: theme.typography.sizes.m,
+        color: theme.colors.primary,
+        marginBottom: theme.spacing.s,
+    },
+    mapContainer: {
+        borderRadius: theme.borderRadius.m,
+        overflow: 'hidden',
+        height: MAP_HEIGHT,
+    },
+    map: {
+        width: '100%',
+        height: MAP_HEIGHT,
+    },
+    mapCoords: {
+        fontFamily: theme.typography.primary,
+        fontSize: theme.typography.sizes.xs,
+        color: theme.colors.textMuted,
+        textAlign: 'center',
+        marginTop: theme.spacing.s,
+    },
+    noMapBanner: {
+        backgroundColor: theme.colors.warningLight,
+        borderRadius: theme.borderRadius.l,
+        padding: theme.spacing.m,
+        marginBottom: theme.spacing.m,
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    noMapIcon: {
+        fontSize: 24,
+        marginRight: theme.spacing.m,
+    },
+    noMapText: {
+        fontFamily: theme.typography.primary,
+        fontSize: theme.typography.sizes.s,
+        color: theme.colors.text,
+        flex: 1,
+        lineHeight: 20,
     },
     // ── Actions ──
     actions: {

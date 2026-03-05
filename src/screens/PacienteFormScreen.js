@@ -8,9 +8,12 @@
  * 
  * Campos del formulario:
  *   - Nombre completo (obligatorio)
- *   - Dirección (obligatorio)
+ *   - Dirección (obligatorio) – se geocodifica automáticamente
  *   - Teléfono
- *   - Coordenadas (lat, lng) – obtenidas automáticamente o manual
+ * 
+ * Las coordenadas GPS se obtienen automáticamente a partir
+ * de la dirección ingresada usando Nominatim (OpenStreetMap),
+ * sin costo y sin API key (CONTEXT.md §2, Estrategia de Costos).
  * 
  * Modos:
  *   - mode: 'crear'  → Agrega un nuevo documento a "pacientes"
@@ -33,10 +36,10 @@ import {
     Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import * as Location from 'expo-location';
 import { theme } from '../theme';
 import { useAuth } from '../context/AuthContext';
 import { createPaciente, updatePaciente, getPacienteById } from '../services/pacientes';
+import { geocodeAddressVerbose } from '../utils/geocoding';
 
 export default function PacienteFormScreen({ route, navigation }) {
     // Si viene pacienteId en params → modo edición
@@ -49,10 +52,9 @@ export default function PacienteFormScreen({ route, navigation }) {
     const [nombre, setNombre] = useState('');
     const [direccion, setDireccion] = useState('');
     const [telefono, setTelefono] = useState('');
-    const [latitud, setLatitud] = useState('');   // String para el input
-    const [longitud, setLongitud] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [isLoadingData, setIsLoadingData] = useState(isEditing);
+    const [geocodingStatus, setGeocodingStatus] = useState(null); // null | 'loading' | 'success' | 'error'
 
     /**
      * Si estamos en modo edición, cargar los datos existentes del paciente.
@@ -70,8 +72,6 @@ export default function PacienteFormScreen({ route, navigation }) {
                 setNombre(data.nombre || '');
                 setDireccion(data.direccion || '');
                 setTelefono(data.telefono || '');
-                setLatitud(data.coordenadas?.lat?.toString() || '');
-                setLongitud(data.coordenadas?.lng?.toString() || '');
             }
         } catch (error) {
             console.error('Error al cargar paciente:', error);
@@ -81,28 +81,7 @@ export default function PacienteFormScreen({ route, navigation }) {
     };
 
     /**
-     * Obtiene las coordenadas GPS de la ubicación actual del dispositivo.
-     * Útil para registrar pacientes en la ubicación donde se encuentran.
-     * Usa expo-location (costo 0, sin API externa).
-     */
-    const handleGetLocation = async () => {
-        try {
-            const { status } = await Location.requestForegroundPermissionsAsync();
-            if (status !== 'granted') {
-                Alert.alert('Permiso denegado', 'Se necesita acceso a la ubicación.');
-                return;
-            }
-            const location = await Location.getCurrentPositionAsync({});
-            setLatitud(location.coords.latitude.toString());
-            setLongitud(location.coords.longitude.toString());
-            Alert.alert('Ubicación obtenida', 'Las coordenadas se han actualizado.');
-        } catch (error) {
-            Alert.alert('Error', 'No se pudo obtener la ubicación.');
-        }
-    };
-
-    /**
-     * Valida los campos y guarda (crea o actualiza) el paciente en Firestore.
+     * Valida los campos, geocodifica la dirección y guarda el paciente.
      */
     const handleSave = async () => {
         // Validación de campos obligatorios
@@ -116,18 +95,50 @@ export default function PacienteFormScreen({ route, navigation }) {
         }
 
         setIsLoading(true);
+        setGeocodingStatus('loading');
+
         try {
+            // 1. Geocodificar la dirección para obtener coordenadas
+            const geoResult = await geocodeAddressVerbose(direccion.trim());
+
+            let coordenadas = { lat: 0, lng: 0 };
+
+            if (geoResult) {
+                coordenadas = { lat: geoResult.lat, lng: geoResult.lng };
+                setGeocodingStatus('success');
+            } else {
+                setGeocodingStatus('error');
+                // Preguntar si quiere guardar sin coordenadas
+                const continuar = await new Promise((resolve) => {
+                    Alert.alert(
+                        '⚠️ Dirección no encontrada',
+                        'No se pudo obtener la ubicación GPS de esta dirección. ' +
+                        'El paciente se guardará sin coordenadas, pero no se podrá validar la proximidad (400m) hasta que se corrija la dirección.\n\n' +
+                        '¿Querés guardar de todas formas?',
+                        [
+                            { text: 'Cancelar', style: 'cancel', onPress: () => resolve(false) },
+                            { text: 'Guardar sin ubicación', onPress: () => resolve(true) },
+                        ]
+                    );
+                });
+
+                if (!continuar) {
+                    setIsLoading(false);
+                    setGeocodingStatus(null);
+                    return;
+                }
+            }
+
+            // 2. Armar los datos del paciente
             const data = {
                 nombre: nombre.trim(),
                 direccion: direccion.trim(),
                 telefono: telefono.trim(),
-                coordenadas: {
-                    lat: parseFloat(latitud) || 0,
-                    lng: parseFloat(longitud) || 0,
-                },
+                coordenadas,
                 creadoPor: user?.uid || '',
             };
 
+            // 3. Guardar en Firestore
             if (isEditing) {
                 await updatePaciente(pacienteId, data);
                 Alert.alert('✅ Paciente actualizado', 'Los datos se guardaron correctamente.');
@@ -142,6 +153,7 @@ export default function PacienteFormScreen({ route, navigation }) {
             Alert.alert('Error', 'No se pudo guardar el paciente. Intentá de nuevo.');
         } finally {
             setIsLoading(false);
+            setGeocodingStatus(null);
         }
     };
 
@@ -195,6 +207,9 @@ export default function PacienteFormScreen({ route, navigation }) {
                             value={direccion}
                             onChangeText={setDireccion}
                         />
+                        <Text style={styles.fieldHint}>
+                            📍 La ubicación en el mapa se obtendrá automáticamente de la dirección
+                        </Text>
                     </View>
 
                     {/* ── Campo: Teléfono ── */}
@@ -210,32 +225,34 @@ export default function PacienteFormScreen({ route, navigation }) {
                         />
                     </View>
 
-                    {/* ── Coordenadas ── */}
-                    <View style={styles.fieldGroup}>
-                        <Text style={styles.label}>Coordenadas</Text>
-                        <View style={styles.coordRow}>
-                            <TextInput
-                                style={[styles.input, styles.coordInput]}
-                                placeholder="Latitud"
-                                placeholderTextColor={theme.colors.textMuted}
-                                keyboardType="numeric"
-                                value={latitud}
-                                onChangeText={setLatitud}
-                            />
-                            <TextInput
-                                style={[styles.input, styles.coordInput]}
-                                placeholder="Longitud"
-                                placeholderTextColor={theme.colors.textMuted}
-                                keyboardType="numeric"
-                                value={longitud}
-                                onChangeText={setLongitud}
-                            />
+                    {/* ── Estado del geocoding (mientras guarda) ── */}
+                    {geocodingStatus && (
+                        <View style={[
+                            styles.geocodingBanner,
+                            geocodingStatus === 'success' && { backgroundColor: theme.colors.successLight },
+                            geocodingStatus === 'error' && { backgroundColor: theme.colors.errorLight },
+                            geocodingStatus === 'loading' && { backgroundColor: theme.colors.infoLight },
+                        ]}>
+                            {geocodingStatus === 'loading' && (
+                                <>
+                                    <ActivityIndicator size="small" color={theme.colors.info} />
+                                    <Text style={[styles.geocodingText, { color: theme.colors.info }]}>
+                                        Buscando ubicación de la dirección...
+                                    </Text>
+                                </>
+                            )}
+                            {geocodingStatus === 'success' && (
+                                <Text style={[styles.geocodingText, { color: theme.colors.success }]}>
+                                    ✅ Ubicación encontrada
+                                </Text>
+                            )}
+                            {geocodingStatus === 'error' && (
+                                <Text style={[styles.geocodingText, { color: theme.colors.error }]}>
+                                    ❌ No se encontró la ubicación
+                                </Text>
+                            )}
                         </View>
-                        {/* Botón para usar GPS */}
-                        <TouchableOpacity style={styles.gpsButton} onPress={handleGetLocation}>
-                            <Text style={styles.gpsButtonText}>📍 Usar ubicación actual</Text>
-                        </TouchableOpacity>
-                    </View>
+                    )}
 
                     {/* ── Botón Guardar ── */}
                     <TouchableOpacity
@@ -244,7 +261,12 @@ export default function PacienteFormScreen({ route, navigation }) {
                         disabled={isLoading}
                     >
                         {isLoading ? (
-                            <ActivityIndicator color={theme.colors.white} />
+                            <View style={styles.savingRow}>
+                                <ActivityIndicator color={theme.colors.white} />
+                                <Text style={[styles.saveButtonText, { marginLeft: 8 }]}>
+                                    {geocodingStatus === 'loading' ? 'Buscando ubicación...' : 'Guardando...'}
+                                </Text>
+                            </View>
                         ) : (
                             <Text style={styles.saveButtonText}>
                                 {isEditing ? 'Guardar Cambios' : 'Registrar Paciente'}
@@ -306,23 +328,25 @@ const styles = StyleSheet.create({
     input: {
         ...theme.commonStyles.input,
     },
-    // Coordenadas en fila
-    coordRow: {
+    fieldHint: {
+        fontFamily: theme.typography.primary,
+        fontSize: theme.typography.sizes.xs,
+        color: theme.colors.textMuted,
+        marginTop: theme.spacing.xs,
+        marginLeft: theme.spacing.xs,
+    },
+    // ── Geocoding status ──
+    geocodingBanner: {
         flexDirection: 'row',
+        alignItems: 'center',
+        padding: theme.spacing.m,
+        borderRadius: theme.borderRadius.m,
+        marginBottom: theme.spacing.l,
         gap: theme.spacing.s,
     },
-    coordInput: {
-        flex: 1,
-    },
-    gpsButton: {
-        marginTop: theme.spacing.s,
-        paddingVertical: theme.spacing.s,
-        alignItems: 'center',
-    },
-    gpsButtonText: {
+    geocodingText: {
         fontFamily: theme.typography.primary,
         fontSize: theme.typography.sizes.s,
-        color: theme.colors.info,
     },
     // ── Buttons ──
     saveButton: {
@@ -335,6 +359,11 @@ const styles = StyleSheet.create({
     saveButtonText: {
         ...theme.commonStyles.buttonPrimaryText,
         fontSize: theme.typography.sizes.l,
+    },
+    savingRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     cancelButton: {
         ...theme.commonStyles.buttonSecondary,

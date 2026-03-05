@@ -3,22 +3,22 @@
  * SEED (alternativa simple) – Usa Firebase web SDK
  * ============================================================
  * 
- * Esta versión NO necesita firebase-admin ni serviceAccountKey.json.
- * Usa directamente el Firebase web SDK que ya tenés instalado.
+ * Carga pacientes de prueba con direcciones REALES de Buenos Aires.
+ * Las coordenadas se obtienen automáticamente via Nominatim (geocoding).
  * 
  * REQUISITO: Las reglas de Firestore deben permitir escritura
  * (temporalmente poné: allow read, write: if true; en las reglas)
  * 
  * USO:
  *   node scripts/seed-pacientes-web.mjs
- * 
- * NOTA: Usamos .mjs (ES modules) porque Firebase web SDK usa imports.
+ *     o
+ *   npm run seed:web
  */
 
 import { initializeApp } from 'firebase/app';
 import { getFirestore, collection, addDoc, Timestamp } from 'firebase/firestore';
 
-// ── Credenciales (las mismas que en tu .env) ──
+// ── Credenciales ──
 const firebaseConfig = {
     apiKey: 'AIzaSyDhzDv8G8TQFpGOXnq5iCHNe5G5HihA5qI',
     authDomain: 'rehabmobile-69cd4.firebaseapp.com',
@@ -32,85 +32,66 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-// ─── PACIENTES DE PRUEBA ───
-// Direcciones REALES de Buenos Aires con coordenadas GPS reales.
-//
-// 🟢 GRUPO 1: Microcentro (todos a menos de 400m entre sí, cercanos al Obelisco)
-// 🟡 GRUPO 2: Palermo (~4-5km del Microcentro)  
-// 🔴 GRUPO 3: La Boca / Barracas (~3km del Microcentro)
-// 🔵 GRUPO 4: Caballito (~5km del Microcentro)
+// ── Geocoding con Nominatim (OpenStreetMap, gratis) ──
+async function geocode(direccion) {
+    try {
+        let query = direccion.trim();
+        if (!query.toLowerCase().includes('argentina')) {
+            query += ', Argentina';
+        }
 
+        const params = new URLSearchParams({
+            q: query,
+            format: 'json',
+            limit: '1',
+            countrycodes: 'ar',
+        });
+
+        const response = await fetch(`https://nominatim.openstreetmap.org/search?${params}`, {
+            headers: {
+                'User-Agent': 'RehabMobile/1.0 (seed-script)',
+                'Accept-Language': 'es',
+            },
+        });
+
+        const results = await response.json();
+
+        if (results && results.length > 0) {
+            return {
+                lat: parseFloat(results[0].lat),
+                lng: parseFloat(results[0].lon),
+            };
+        }
+        return { lat: 0, lng: 0 };
+    } catch {
+        return { lat: 0, lng: 0 };
+    }
+}
+
+// ── Pacientes de Prueba ──
+// Direcciones REALES de Buenos Aires.
+// Las coordenadas se obtienen automáticamente via geocoding.
 const PACIENTES_SEED = [
-    // ══════╗ GRUPO 1: MICROCENTRO ══════
-    {
-        nombre: 'María García López',
-        direccion: 'Av. Corrientes 1234, CABA',
-        coordenadas: { lat: -34.6040, lng: -58.3850 },
-        telefono: '11 2345-6789',
-    },
-    {
-        nombre: 'Carlos Rodríguez',
-        direccion: 'Av. 9 de Julio 1100, CABA',
-        coordenadas: { lat: -34.6042, lng: -58.3816 },
-        telefono: '11 3456-7890',
-    },
-    {
-        nombre: 'Ana Martínez',
-        direccion: 'Diagonal Norte 640, CABA',
-        coordenadas: { lat: -34.6050, lng: -58.3790 },
-        telefono: '11 4567-8901',
-    },
-    {
-        nombre: 'Roberto Fernández',
-        direccion: 'Lavalle 730, CABA',
-        coordenadas: { lat: -34.6025, lng: -58.3790 },
-        telefono: '11 5678-9012',
-    },
+    // GRUPO 1: MICROCENTRO (cercanos entre sí, ~400m)
+    { nombre: 'María García López', direccion: 'Av. Corrientes 1234, CABA', telefono: '11 2345-6789' },
+    { nombre: 'Carlos Rodríguez', direccion: 'Av. 9 de Julio 1100, CABA', telefono: '11 3456-7890' },
+    { nombre: 'Ana Martínez', direccion: 'Diagonal Norte 640, CABA', telefono: '11 4567-8901' },
+    { nombre: 'Roberto Fernández', direccion: 'Lavalle 730, CABA', telefono: '11 5678-9012' },
 
-    // ══════ GRUPO 2: PALERMO ══════
-    {
-        nombre: 'Lucía Pérez',
-        direccion: 'Av. Santa Fe 3250, Palermo, CABA',
-        coordenadas: { lat: -34.5875, lng: -58.4050 },
-        telefono: '11 6789-0123',
-    },
-    {
-        nombre: 'Diego Álvarez',
-        direccion: 'Honduras 5500, Palermo Soho, CABA',
-        coordenadas: { lat: -34.5830, lng: -58.4290 },
-        telefono: '11 7890-1234',
-    },
-    {
-        nombre: 'Valentina Torres',
-        direccion: 'Av. Del Libertador 4500, Palermo, CABA',
-        coordenadas: { lat: -34.5720, lng: -58.4200 },
-        telefono: '11 8901-2345',
-    },
+    // GRUPO 2: PALERMO (~4-5km del Microcentro)
+    { nombre: 'Lucía Pérez', direccion: 'Av. Santa Fe 3250, Palermo, CABA', telefono: '11 6789-0123' },
+    { nombre: 'Diego Álvarez', direccion: 'Honduras 5500, Palermo, CABA', telefono: '11 7890-1234' },
+    { nombre: 'Valentina Torres', direccion: 'Av. Del Libertador 4500, Palermo, CABA', telefono: '11 8901-2345' },
 
-    // ══════ GRUPO 3: LA BOCA / BARRACAS ══════
-    {
-        nombre: 'Martín Romero',
-        direccion: 'Caminito 35, La Boca, CABA',
-        coordenadas: { lat: -34.6393, lng: -58.3634 },
-        telefono: '11 9012-3456',
-    },
-    {
-        nombre: 'Florencia Díaz',
-        direccion: 'Av. Montes de Oca 800, Barracas, CABA',
-        coordenadas: { lat: -34.6350, lng: -58.3800 },
-        telefono: '11 0123-4567',
-    },
+    // GRUPO 3: LA BOCA / BARRACAS (~3km del Microcentro)
+    { nombre: 'Martín Romero', direccion: 'Caminito 35, La Boca, CABA', telefono: '11 9012-3456' },
+    { nombre: 'Florencia Díaz', direccion: 'Av. Montes de Oca 800, Barracas, CABA', telefono: '11 0123-4567' },
 
-    // ══════ GRUPO 4: CABALLITO ══════
-    {
-        nombre: 'Santiago Morales',
-        direccion: 'Av. Rivadavia 5200, Caballito, CABA',
-        coordenadas: { lat: -34.6180, lng: -58.4360 },
-        telefono: '11 1234-5670',
-    },
+    // GRUPO 4: CABALLITO (~5km del Microcentro)
+    { nombre: 'Santiago Morales', direccion: 'Av. Rivadavia 5200, Caballito, CABA', telefono: '11 1234-5670' },
 ];
 
-// ─── EJECUTAR ───
+// ── Ejecutar ──
 async function seed() {
     console.log('');
     console.log('🏥 RehabMobile – Seed de Pacientes');
@@ -120,16 +101,31 @@ async function seed() {
     let count = 0;
     for (const paciente of PACIENTES_SEED) {
         try {
+            // Geocodificar dirección
+            console.log(`  🔍 Geocodificando: ${paciente.direccion}...`);
+            const coordenadas = await geocode(paciente.direccion);
+
+            // Esperar 1.1 segundos entre requests (política de Nominatim)
+            await new Promise(r => setTimeout(r, 1100));
+
             const docRef = await addDoc(collection(db, 'pacientes'), {
-                ...paciente,
+                nombre: paciente.nombre,
+                direccion: paciente.direccion,
+                telefono: paciente.telefono,
+                coordenadas,
                 creadoPor: 'seed-script',
                 creadoEn: Timestamp.now(),
                 actualizadoEn: Timestamp.now(),
             });
+
             count++;
+            const coordStr = coordenadas.lat !== 0
+                ? `${coordenadas.lat.toFixed(4)}, ${coordenadas.lng.toFixed(4)}`
+                : '⚠️ No encontrada';
+
             console.log(`  ✅ ${paciente.nombre} (${docRef.id})`);
             console.log(`     📍 ${paciente.direccion}`);
-            console.log(`     🗺️  ${paciente.coordenadas.lat}, ${paciente.coordenadas.lng}`);
+            console.log(`     🗺️  Coordenadas: ${coordStr}`);
             console.log('');
         } catch (error) {
             console.error(`  ❌ Error con ${paciente.nombre}:`, error.message);
@@ -139,12 +135,11 @@ async function seed() {
     console.log('═══════════════════════════════════');
     console.log(`✅ ${count}/${PACIENTES_SEED.length} pacientes cargados!`);
     console.log('');
-    console.log('🧪 Para testear la proximidad:');
+    console.log('🧪 Para testear:');
     console.log('   1. Abrí la app en tu celular');
-    console.log('   2. Creá un turno para un paciente del GRUPO 1 (Microcentro)');
-    console.log('   3. Si estás cerca del Obelisco → podrás aceptar el turno');
-    console.log('   4. Creá un turno para un paciente de Palermo');
-    console.log('   5. Si estás en Microcentro → NO podrás aceptar el turno');
+    console.log('   2. Andá a Pacientes → tocá uno para ver su perfil');
+    console.log('   3. Deberías ver el mapa con su ubicación');
+    console.log('   4. Creá un turno y probá aceptar con GPS');
     console.log('');
     process.exit(0);
 }
