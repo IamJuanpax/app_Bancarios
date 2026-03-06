@@ -1,154 +1,94 @@
 /**
  * ============================================================
- * NOTIFICATION CONTEXT – Contexto global de notificaciones
+ * NOTIFICATION CONTEXT – Proveedor de notificaciones locales
  * ============================================================
+ * 
+ * Gestiona la inicialización de notificaciones locales y
+ * el manejo de respuestas cuando el usuario toca una notificación.
  * 
  * Responsabilidades:
  *   1. Configurar el handler de notificaciones al montar
- *   2. Solicitar permisos de notificaciones al detectar un usuario logueado
- *   3. Proveer funciones de notificación a toda la app vía useNotifications()
- *   4. Manejar la navegación cuando el usuario toca una notificación
- *   5. Limpiar recordatorios al hacer logout
+ *   2. Solicitar permisos de notificaciones
+ *   3. Escuchar cuando el usuario toca una notificación y
+ *      navegar a la pantalla correspondiente (deep-linking)
  * 
- * Se posiciona DENTRO del AuthProvider y del NavigationContainer
- * para poder acceder tanto al usuario como a la navegación.
- * 
- * Estrategia costo $0: solo notificaciones locales.
+ * Estrategia de costos (CONTEXT.md §2, §6):
+ *   - Se usan SOLO notificaciones locales (costo $0)
+ *   - NO se usa Firebase Cloud Messaging
  */
 
 import React, { createContext, useContext, useEffect, useRef } from 'react';
 import * as Notifications from 'expo-notifications';
-import { useAuth } from './AuthContext';
 import {
     configureNotifications,
     requestNotificationPermissions,
-    cancelAllReminders,
-    notifyTurnoCreado,
-    notifyTurnoAceptado,
-    notifyTurnoCompletado,
-    notifyTurnoCancelado,
-    scheduleReminder,
-    cancelReminder,
 } from '../services/notificationService';
+import { useAuth } from './AuthContext';
 
-// Crear el contexto
-const NotificationContext = createContext(null);
+const NotificationContext = createContext({});
 
 /**
- * Hook para acceder a las funciones de notificaciones.
- * 
- * Ejemplo de uso:
- *   const { notifyTurnoCreado, notifyTurnoAceptado } = useNotifications();
- *   await notifyTurnoCreado('Juan Pérez', new Date());
+ * Hook para acceder al contexto de notificaciones.
+ * Actualmente expone el contexto vacío, pero se puede
+ * extender para exponer funciones como sendLocalNotification.
  */
-export const useNotifications = () => {
-    const context = useContext(NotificationContext);
-    if (!context) {
-        throw new Error('useNotifications debe usarse dentro de un NotificationProvider');
-    }
-    return context;
-};
+export const useNotifications = () => useContext(NotificationContext);
 
 /**
- * NotificationProvider – Envuelve la app y gestiona el ciclo de vida
- * de las notificaciones.
- * 
- * Debe colocarse DENTRO del AuthProvider:
- *   <AuthProvider>
- *     <NotificationProvider>
- *       <AppNavigator />
- *     </NotificationProvider>
- *   </AuthProvider>
+ * Provider que envuelve la app y gestiona las notificaciones.
  * 
  * @param {object} props
+ * @param {React.RefObject} props.navigationRef - Ref al NavigationContainer
  * @param {React.ReactNode} props.children
- * @param {object} [props.navigationRef] - Ref de NavigationContainer para deep-linking
  */
-export function NotificationProvider({ children, navigationRef }) {
+export function NotificationProvider({ navigationRef, children }) {
     const { user } = useAuth();
+    const responseListener = useRef(null);
 
-    // Refs para listeners (para cleanup)
-    const notificationListener = useRef();
-    const responseListener = useRef();
-
+    // ── Configurar handler de notificaciones al montar ──
     useEffect(() => {
-        // Configurar el handler de notificaciones (cómo se muestran en foreground)
-        // Envuelto en try-catch: en Expo Go SDK 53+ esto puede lanzar un error
-        // sobre remote notifications que NO afecta a las notificaciones locales.
-        try {
-            configureNotifications();
-        } catch (e) {
-            console.log('ℹ️ configureNotifications:', e.message);
-        }
+        configureNotifications();
     }, []);
 
+    // ── Solicitar permisos cuando el usuario se loguea ──
     useEffect(() => {
         if (user) {
-            // Usuario logueado → solicitar permisos
-            // Envuelto en try-catch para evitar errores en Expo Go (SDK 53+)
-            // donde las notificaciones remotas no están disponibles
-            requestNotificationPermissions().catch((e) => {
-                console.log('ℹ️ Permisos de notificaciones:', e.message);
-            });
-
-            // Listeners de notificaciones (también envueltos por seguridad)
-            try {
-                // Listener: notificación recibida mientras la app está abierta
-                notificationListener.current = Notifications.addNotificationReceivedListener(
-                    (notification) => {
-                        console.log('📩 Notificación recibida:', notification.request.content.title);
-                    }
-                );
-
-                // Listener: usuario tocó una notificación
-                responseListener.current = Notifications.addNotificationResponseReceivedListener(
-                    (response) => {
-                        const data = response.notification.request.content.data;
-                        console.log('👆 Notificación tocada, data:', data);
-
-                        // Navegar a la pantalla correspondiente si hay un deep-link
-                        if (data?.screen && data?.turnoId && navigationRef?.current) {
-                            navigationRef.current.navigate(data.screen, {
-                                turnoId: data.turnoId,
-                            });
-                        }
-                    }
-                );
-            } catch (e) {
-                console.log('ℹ️ Notification listeners:', e.message);
-            }
+            requestNotificationPermissions();
         }
+    }, [user]);
 
-        // Cleanup al desmontar o cambiar de usuario
-        return () => {
-            if (notificationListener.current) {
-                Notifications.removeNotificationSubscription(notificationListener.current);
+    // ── Escuchar cuando el usuario toca una notificación ──
+    useEffect(() => {
+        // Listener para respuesta a notificaciones (tap)
+        responseListener.current = Notifications.addNotificationResponseReceivedListener(
+            (response) => {
+                const data = response.notification.request.content.data;
+
+                // Deep-linking: navegar a la pantalla indicada en la notificación
+                if (data?.screen && navigationRef?.current) {
+                    try {
+                        const params = {};
+                        if (data.turnoId) {
+                            params.turnoId = data.turnoId;
+                        }
+                        navigationRef.current.navigate(data.screen, params);
+                    } catch (error) {
+                        console.warn('No se pudo navegar desde la notificación:', error);
+                    }
+                }
             }
+        );
+
+        // Limpiar listener al desmontar
+        return () => {
             if (responseListener.current) {
                 Notifications.removeNotificationSubscription(responseListener.current);
             }
         };
-    }, [user]);
-
-    // Cuando el usuario hace logout, cancelar todos los recordatorios
-    useEffect(() => {
-        if (!user) {
-            cancelAllReminders();
-        }
-    }, [user]);
-
-    // Valor del contexto: expone las funciones de notificación
-    const value = {
-        notifyTurnoCreado,
-        notifyTurnoAceptado,
-        notifyTurnoCompletado,
-        notifyTurnoCancelado,
-        scheduleReminder,
-        cancelReminder,
-    };
+    }, [navigationRef]);
 
     return (
-        <NotificationContext.Provider value={value}>
+        <NotificationContext.Provider value={{}}>
             {children}
         </NotificationContext.Provider>
     );
