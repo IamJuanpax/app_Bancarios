@@ -35,7 +35,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
 import { theme } from '../theme';
 import { useAuth } from '../context/AuthContext';
-import { useNotifications } from '../context/NotificationContext';
+import { notifyTurnoAceptado, notifyTurnoCompletado, notifyTurnoCancelado, cancelReminder } from '../services/notificationService';
 import { updateEstadoTurno, deleteTurno } from '../services/turnos';
 import { getPacienteById } from '../services/pacientes';
 import { calculateDistance, isWithinRange, formatDistance } from '../utils/haversine';
@@ -57,7 +57,7 @@ const STATUS_CONFIG = {
 export default function DetalleTurnoScreen({ route, navigation }) {
     const { turnoId } = route.params;
     const { user, userRole, userName } = useAuth();
-    const { notifyTurnoAceptado, notifyTurnoCompletado, notifyTurnoCancelado, cancelReminder } = useNotifications();
+
 
     // ── Estado ──
     const [turno, setTurno] = useState(null);
@@ -217,11 +217,15 @@ export default function DetalleTurnoScreen({ route, navigation }) {
                             }));
 
                             // 📩 Notificar aceptación + programar recordatorio automático
-                            await notifyTurnoAceptado(
-                                turno.pacienteNombre || 'Paciente',
-                                turno.fecha_hora,
-                                turnoId
-                            );
+                            try {
+                                await notifyTurnoAceptado(
+                                    turno.pacienteNombre || 'Paciente',
+                                    turno.fecha_hora,
+                                    turnoId
+                                );
+                            } catch (notifError) {
+                                console.warn('Notificación no enviada:', notifError?.message);
+                            }
 
                             Alert.alert('✅ Turno aceptado', 'El turno fue aceptado y se programó un recordatorio 1 hora antes.');
                         } catch (error) {
@@ -253,7 +257,7 @@ export default function DetalleTurnoScreen({ route, navigation }) {
                         try {
                             await updateEstadoTurno(turnoId, 'completado');
                             setTurno(prev => ({ ...prev, estado: 'completado' }));
-                            await notifyTurnoCompletado(turno.pacienteNombre || 'Paciente');
+                            try { await notifyTurnoCompletado(turno.pacienteNombre || 'Paciente'); } catch (e) { /* ok */ }
                             Alert.alert('✅ Listo', 'El turno fue completado.');
                         } catch (error) {
                             Alert.alert('Error', 'No se pudo completar el turno.');
@@ -269,7 +273,7 @@ export default function DetalleTurnoScreen({ route, navigation }) {
                         try {
                             await updateEstadoTurno(turnoId, 'completado');
                             setTurno(prev => ({ ...prev, estado: 'completado' }));
-                            await notifyTurnoCompletado(turno.pacienteNombre || 'Paciente');
+                            try { await notifyTurnoCompletado(turno.pacienteNombre || 'Paciente'); } catch (e) { /* ok */ }
 
                             // Navegar directamente a registrar evolución
                             navigation.navigate('NuevaEntradaHistoria', {
@@ -310,7 +314,7 @@ export default function DetalleTurnoScreen({ route, navigation }) {
 
                             const pacNombre = turno.pacienteNombre || 'Paciente';
                             if (nuevoEstado === 'cancelado') {
-                                await notifyTurnoCancelado(pacNombre, turnoId);
+                                try { await notifyTurnoCancelado(pacNombre, turnoId); } catch (e) { /* ok */ }
                             }
 
                             Alert.alert('✅ Listo', `El turno fue ${nuevoEstado} exitosamente.`);

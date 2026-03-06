@@ -16,7 +16,7 @@
  * se muestra precargado.
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
     View,
     Text,
@@ -32,7 +32,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { theme } from '../theme';
 import { useAuth } from '../context/AuthContext';
-import { useNotifications } from '../context/NotificationContext';
+import { notifyTurnoCreado } from '../services/notificationService';
 import { getPacientes } from '../services/pacientes';
 import { createTurno } from '../services/turnos';
 
@@ -42,7 +42,6 @@ export default function CrearTurnoScreen({ route, navigation }) {
     const preselectedPacienteNombre = route?.params?.pacienteNombre;
 
     const { user } = useAuth();
-    const { notifyTurnoCreado, scheduleReminder } = useNotifications();
 
     // ── Estado ──
     const [pacientes, setPacientes] = useState([]);
@@ -58,6 +57,17 @@ export default function CrearTurnoScreen({ route, navigation }) {
     const [isLoading, setIsLoading] = useState(false);
     const [showPacienteList, setShowPacienteList] = useState(false);
     const [pacienteTelefono, setPacienteTelefono] = useState('');
+    const [busquedaPaciente, setBusquedaPaciente] = useState('');
+
+    // Filtrar pacientes por búsqueda
+    const pacientesFiltrados = useMemo(() => {
+        if (!busquedaPaciente.trim()) return pacientes;
+        const query = busquedaPaciente.toLowerCase().trim();
+        return pacientes.filter(p =>
+            p.nombre?.toLowerCase().includes(query) ||
+            p.direccion?.toLowerCase().includes(query)
+        );
+    }, [pacientes, busquedaPaciente]);
 
     // Cargar lista de pacientes al montar
     useEffect(() => {
@@ -141,30 +151,58 @@ export default function CrearTurnoScreen({ route, navigation }) {
 
         // Parsear fecha DD/MM/AAAA
         const partes = fecha.split('/');
-        if (partes.length !== 3) {
-            Alert.alert('Formato inválido', 'La fecha debe tener formato DD/MM/AAAA');
+        if (partes.length !== 3 || partes[2].length !== 4) {
+            Alert.alert('Formato inválido', 'La fecha debe tener formato DD/MM/AAAA.');
             return;
         }
-        const [dia, mes, anio] = partes;
+        const [dia, mes, anio] = partes.map(Number);
+
+        // Validar rangos del día y mes
+        if (mes < 1 || mes > 12) {
+            Alert.alert('Fecha inválida', 'El mes debe estar entre 01 y 12.');
+            return;
+        }
+        if (dia < 1 || dia > 31) {
+            Alert.alert('Fecha inválida', 'El día debe estar entre 01 y 31.');
+            return;
+        }
 
         // Parsear hora HH:MM
         const horaPartes = hora.split(':');
         if (horaPartes.length !== 2) {
-            Alert.alert('Formato inválido', 'La hora debe tener formato HH:MM');
+            Alert.alert('Formato inválido', 'La hora debe tener formato HH:MM.');
+            return;
+        }
+        const [horas, minutos] = horaPartes.map(Number);
+
+        // Validar rango de hora (00:00 a 23:59)
+        if (horas < 0 || horas > 23) {
+            Alert.alert('Hora inválida', 'La hora debe estar entre 00 y 23.');
+            return;
+        }
+        if (minutos < 0 || minutos > 59) {
+            Alert.alert('Hora inválida', 'Los minutos deben estar entre 00 y 59.');
             return;
         }
 
         // Construir objeto Date
-        const fechaHora = new Date(
-            parseInt(anio),
-            parseInt(mes) - 1,    // Mes 0-indexado en JavaScript
-            parseInt(dia),
-            parseInt(horaPartes[0]),
-            parseInt(horaPartes[1])
-        );
+        const fechaHora = new Date(anio, mes - 1, dia, horas, minutos);
 
         if (isNaN(fechaHora.getTime())) {
             Alert.alert('Fecha inválida', 'Verificá que la fecha y hora sean correctas.');
+            return;
+        }
+
+        // Validar que la fecha no sea en el pasado (mínimo hoy)
+        const ahora = new Date();
+        const hoyInicio = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate());
+        const fechaSinHora = new Date(anio, mes - 1, dia);
+
+        if (fechaSinHora < hoyInicio) {
+            Alert.alert(
+                'Fecha pasada',
+                'No se puede programar un turno en una fecha anterior a hoy. Ingresá una fecha desde hoy en adelante.'
+            );
             return;
         }
 
@@ -181,7 +219,12 @@ export default function CrearTurnoScreen({ route, navigation }) {
             });
 
             // 📩 Notificar que se creó el turno (notificación local)
-            await notifyTurnoCreado(pacienteNombre, fechaHora);
+            try {
+                await notifyTurnoCreado(pacienteNombre, fechaHora);
+            } catch (notifError) {
+                // No bloquear la creación del turno si falla la notificación
+                console.warn('Notificación no enviada:', notifError?.message);
+            }
 
             Alert.alert('✅ Turno creado', 'El turno se programó exitosamente.');
             navigation.goBack();
@@ -227,25 +270,55 @@ export default function CrearTurnoScreen({ route, navigation }) {
                             </Text>
                         </TouchableOpacity>
 
-                        {/* Lista desplegable de pacientes */}
+                        {/* Lista desplegable de pacientes con búsqueda */}
                         {showPacienteList && (
                             <View style={styles.dropdownList}>
-                                {pacientes.map((p) => (
-                                    <TouchableOpacity
-                                        key={p.id}
-                                        style={[
-                                            styles.dropdownItem,
-                                            pacienteSeleccionado === p.id && styles.dropdownItemSelected,
-                                        ]}
-                                        onPress={() => selectPaciente(p)}
-                                    >
-                                        <Text style={styles.dropdownItemText}>{p.nombre}</Text>
-                                        <Text style={styles.dropdownItemSub}>{p.direccion}</Text>
-                                    </TouchableOpacity>
-                                ))}
-                                {pacientes.length === 0 && (
-                                    <Text style={styles.dropdownEmpty}>No hay pacientes registrados</Text>
-                                )}
+                                {/* Campo de búsqueda */}
+                                <View style={styles.searchContainer}>
+                                    <Text style={styles.searchIcon}>🔍</Text>
+                                    <TextInput
+                                        style={styles.searchInput}
+                                        placeholder="Buscar paciente por nombre..."
+                                        placeholderTextColor={theme.colors.textMuted}
+                                        value={busquedaPaciente}
+                                        onChangeText={setBusquedaPaciente}
+                                        autoFocus={true}
+                                    />
+                                    {busquedaPaciente.length > 0 && (
+                                        <TouchableOpacity onPress={() => setBusquedaPaciente('')}>
+                                            <Text style={styles.searchClear}>✕</Text>
+                                        </TouchableOpacity>
+                                    )}
+                                </View>
+
+                                {/* Lista scrolleable de pacientes */}
+                                <ScrollView
+                                    style={styles.dropdownScroll}
+                                    nestedScrollEnabled={true}
+                                    keyboardShouldPersistTaps="handled"
+                                >
+                                    {pacientesFiltrados.map((p) => (
+                                        <TouchableOpacity
+                                            key={p.id}
+                                            style={[
+                                                styles.dropdownItem,
+                                                pacienteSeleccionado === p.id && styles.dropdownItemSelected,
+                                            ]}
+                                            onPress={() => selectPaciente(p)}
+                                        >
+                                            <Text style={styles.dropdownItemText}>{p.nombre}</Text>
+                                            <Text style={styles.dropdownItemSub}>{p.direccion}</Text>
+                                        </TouchableOpacity>
+                                    ))}
+                                    {pacientesFiltrados.length === 0 && busquedaPaciente.trim() !== '' && (
+                                        <Text style={styles.dropdownEmpty}>
+                                            No se encontraron pacientes con "{busquedaPaciente}"
+                                        </Text>
+                                    )}
+                                    {pacientes.length === 0 && (
+                                        <Text style={styles.dropdownEmpty}>No hay pacientes registrados</Text>
+                                    )}
+                                </ScrollView>
                             </View>
                         )}
                     </View>
@@ -386,8 +459,39 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: theme.colors.border,
         marginTop: theme.spacing.xs,
-        maxHeight: 200,
+        maxHeight: 300,
         ...theme.shadows.medium,
+    },
+    dropdownScroll: {
+        maxHeight: 240,
+    },
+    // ── Search dentro del dropdown ──
+    searchContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: theme.spacing.m,
+        paddingVertical: theme.spacing.s,
+        borderBottomWidth: 1,
+        borderBottomColor: theme.colors.border,
+        backgroundColor: theme.colors.background,
+        borderTopLeftRadius: theme.borderRadius.m,
+        borderTopRightRadius: theme.borderRadius.m,
+    },
+    searchIcon: {
+        fontSize: 14,
+        marginRight: theme.spacing.s,
+    },
+    searchInput: {
+        flex: 1,
+        fontFamily: theme.typography.primary,
+        fontSize: theme.typography.sizes.s,
+        color: theme.colors.text,
+        paddingVertical: Platform.OS === 'ios' ? theme.spacing.xs : 0,
+    },
+    searchClear: {
+        fontSize: 16,
+        color: theme.colors.textMuted,
+        paddingHorizontal: theme.spacing.xs,
     },
     dropdownItem: {
         padding: theme.spacing.m,

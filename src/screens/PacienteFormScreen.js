@@ -84,6 +84,26 @@ export default function PacienteFormScreen({ route, navigation }) {
     };
 
     /**
+     * Auto-formatea el teléfono mientras el usuario escribe.
+     * Formato argentino: XX XXXX XXXX (10 dígitos)
+     * Ejemplo: "11" → "11" → "1112" → "11 12" → "11 1234 1234"
+     */
+    const handleTelefonoChange = (text) => {
+        // Quitar todo lo que no sea dígito
+        const digits = text.replace(/\D/g, '');
+
+        let formatted = '';
+        if (digits.length <= 2) {
+            formatted = digits;
+        } else if (digits.length <= 6) {
+            formatted = digits.slice(0, 2) + ' ' + digits.slice(2);
+        } else {
+            formatted = digits.slice(0, 2) + ' ' + digits.slice(2, 6) + ' ' + digits.slice(6, 10);
+        }
+        setTelefono(formatted);
+    };
+
+    /**
      * Obtiene la ubicación actual del dispositivo y rellena la dirección.
      * Usa reverse geocoding para convertir coords → dirección.
      */
@@ -140,6 +160,18 @@ export default function PacienteFormScreen({ route, navigation }) {
         if (!direccion.trim()) {
             Alert.alert('Campo requerido', 'La dirección es obligatoria.');
             return;
+        }
+
+        // Validar formato de teléfono argentino (XX XXXX XXXX)
+        if (telefono.trim()) {
+            const telefonoDigits = telefono.replace(/\D/g, '');
+            if (telefonoDigits.length !== 10) {
+                Alert.alert(
+                    'Teléfono inválido',
+                    'El número de teléfono debe tener 10 dígitos con formato argentino: XX XXXX XXXX (ej: 11 1234 1234).'
+                );
+                return;
+            }
         }
 
         setIsLoading(true);
@@ -304,12 +336,16 @@ export default function PacienteFormScreen({ route, navigation }) {
                         <Text style={styles.label}>Teléfono</Text>
                         <TextInput
                             style={styles.input}
-                            placeholder="Ej: 11 2345-6789"
+                            placeholder="Ej: 11 1234 1234"
                             placeholderTextColor={theme.colors.textMuted}
                             keyboardType="phone-pad"
+                            maxLength={12}
                             value={telefono}
-                            onChangeText={setTelefono}
+                            onChangeText={handleTelefonoChange}
                         />
+                        <Text style={styles.fieldHint}>
+                            📱 Formato argentino: XX XXXX XXXX (10 dígitos)
+                        </Text>
                     </View>
 
                     {/* ── Estado del geocoding (mientras guarda) ── */}

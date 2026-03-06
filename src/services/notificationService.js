@@ -44,7 +44,8 @@ const REMINDER_MINUTES_BEFORE = 60; // 1 hora antes del turno
 export const configureNotifications = () => {
     Notifications.setNotificationHandler({
         handleNotification: async () => ({
-            shouldShowAlert: true,   // Mostrar alerta visual
+            shouldShowBanner: true,  // Mostrar banner visual (reemplaza shouldShowAlert)
+            shouldShowList: true,    // Mostrar en lista de notificaciones
             shouldPlaySound: true,   // Reproducir sonido
             shouldSetBadge: true,    // Mostrar badge en el ícono de la app
         }),
