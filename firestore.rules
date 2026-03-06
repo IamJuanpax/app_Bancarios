@@ -1,0 +1,194 @@
+rules_version = '2';
+
+// ============================================================
+// FIRESTORE SECURITY RULES – RehabMobile
+// ============================================================
+//
+// Estructura de colecciones protegidas:
+//   - Usuarios/{userId}        → Datos de usuario (rol, nombre)
+//   - pacientes/{pacienteId}   → Datos de pacientes
+//     └── historia_clinica/{entradaId}  → Subcolección de historia clínica
+//   - turnos/{turnoId}         → Turnos/citas médicas
+//
+// Roles:
+//   - admin:  Acceso total (CRUD de pacientes, turnos, usuarios)
+//   - medico: Lectura de pacientes, gestión de turnos propios,
+//             registro de historia clínica
+//
+// Principios aplicados:
+//   1. Deny-by-default: todo bloqueado salvo reglas explícitas
+//   2. Autenticación requerida en TODAS las operaciones
+//   3. Validación de roles del lado del servidor
+//   4. Restricción de campos que pueden ser escritos
+// ============================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Funciones helper ──
+
+    // Verifica si el usuario está autenticado
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Obtiene el rol del usuario actual desde la colección Usuarios
+    function getUserRole() {
+      return get(/databases/$(database)/documents/Usuarios/$(request.auth.uid)).data.rol;
+    }
+
+    // Verifica si el usuario actual es admin
+    function isAdmin() {
+      return isAuthenticated() && getUserRole() == 'admin';
+    }
+
+    // Verifica si el usuario actual es médico
+    function isMedico() {
+      return isAuthenticated() && getUserRole() == 'medico';
+    }
+
+    // Verifica si el usuario es admin O médico (cualquier rol válido)
+    function hasValidRole() {
+      return isAuthenticated() && getUserRole() in ['admin', 'medico'];
+    }
+
+    // ── Regla global: Deny-by-default ──
+    // Cualquier colección/documento no listado explícitamente
+    // queda bloqueado por completo.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // ══════════════════════════════════════════════════════════
+    // COLECCIÓN: Usuarios
+    // ══════════════════════════════════════════════════════════
+    // Cada usuario solo puede LEER su propio documento.
+    // Solo los admins pueden crear/modificar documentos de usuario.
+    // Nadie puede eliminar usuarios desde el cliente.
+    match /Usuarios/{userId} {
+      // Cualquier usuario autenticado puede leer cualquier perfil
+      // (necesario para ver el nombre del médico asignado a un turno)
+      allow read: if isAuthenticated();
+
+      // Solo admins pueden crear o actualizar usuarios
+      allow create, update: if isAdmin();
+
+      // Eliminar usuarios: bloqueado desde el cliente
+      // (se debe hacer desde Firebase Console o Cloud Functions)
+      allow delete: if false;
+    }
+
+    // ══════════════════════════════════════════════════════════
+    // COLECCIÓN: Pacientes
+    // ══════════════════════════════════════════════════════════
+    // Todos los usuarios con rol válido pueden leer pacientes.
+    // Solo usuarios con rol válido pueden crear y editar pacientes.
+    // Solo admins pueden eliminar pacientes.
+    match /pacientes/{pacienteId} {
+      // Lectura: cualquier usuario con rol válido (admin o medico)
+      allow read: if hasValidRole();
+
+      // Crear paciente: cualquier usuario con rol válido
+      // Valida que los campos requeridos estén presentes
+      allow create: if hasValidRole()
+        && request.resource.data.keys().hasAll(['nombre', 'creadoEn'])
+        && request.resource.data.nombre is string
+        && request.resource.data.nombre.size() >= 2
+        && request.resource.data.nombre.size() <= 200;
+
+      // Actualizar paciente: cualquier usuario con rol válido
+      // No permite modificar el campo 'creadoPor'
+      allow update: if hasValidRole()
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['creadoPor']));
+
+      // Eliminar paciente: solo admin
+      allow delete: if isAdmin();
+
+      // ── SUBCOLECCIÓN: Historia Clínica ──
+      // La historia clínica está anidada dentro de cada paciente.
+      // Solo usuarios con rol válido pueden acceder.
+      match /historia_clinica/{entradaId} {
+        // Lectura: cualquier usuario con rol válido
+        allow read: if hasValidRole();
+
+        // Crear entrada: cualquier usuario con rol válido
+        // Valida que tenga los campos requeridos
+        allow create: if hasValidRole()
+          && request.resource.data.keys().hasAll(['nota', 'fecha', 'medico'])
+          && request.resource.data.nota is string
+          && request.resource.data.nota.size() >= 1
+          && request.resource.data.nota.size() <= 10000;
+
+        // Actualizar entrada: solo el médico que la creó o un admin
+        allow update: if isAdmin()
+          || (isMedico() && resource.data.medico == request.auth.uid);
+
+        // Eliminar entrada: solo admin
+        allow delete: if isAdmin();
+      }
+    }
+
+    // ══════════════════════════════════════════════════════════
+    // COLECCIÓN: Turnos
+    // ══════════════════════════════════════════════════════════
+    // Todos los usuarios con rol válido pueden leer todos los turnos
+    // (necesario porque los turnos pendientes no tienen médico asignado
+    // y cualquier médico puede aceptarlos).
+    match /turnos/{turnoId} {
+      // Lectura: cualquier usuario con rol válido
+      allow read: if hasValidRole();
+
+      // Crear turno: cualquier usuario con rol válido
+      // Valida campos obligatorios y que el estado inicial sea 'pendiente'
+      allow create: if hasValidRole()
+        && request.resource.data.keys().hasAll(['paciente_id', 'estado', 'creadoEn'])
+        && request.resource.data.estado == 'pendiente'
+        && request.resource.data.paciente_id is string
+        && request.resource.data.paciente_id.size() > 0;
+
+      // Actualizar turno: cualquier usuario con rol válido
+      // Reglas de transición de estado:
+      //   - pendiente  → aceptado (cualquier médico, al aceptar se asigna)
+      //   - pendiente  → cancelado (cualquier usuario)
+      //   - aceptado   → completado (solo el médico asignado o admin)
+      //   - aceptado   → cancelado (solo el médico asignado o admin)
+      //   - completado → no se puede cambiar
+      //   - cancelado  → no se puede cambiar
+      allow update: if hasValidRole()
+        && validStateTransition();
+
+      // Eliminar turno: solo si está cancelado o completado
+      // y el usuario tiene rol válido
+      allow delete: if hasValidRole()
+        && resource.data.estado in ['cancelado', 'completado'];
+    }
+
+    // ── Función de validación de transiciones de estado de turnos ──
+    function validStateTransition() {
+      let currentState = resource.data.estado;
+      let newState = request.resource.data.estado;
+
+      // Si no se está cambiando el estado, permitir la actualización
+      // (ej: solo actualizar notas o fecha)
+      let stateUnchanged = currentState == newState;
+
+      // Transiciones válidas
+      let pendienteToAceptado = currentState == 'pendiente' && newState == 'aceptado';
+      let pendienteToCancelado = currentState == 'pendiente' && newState == 'cancelado';
+
+      // De aceptado: solo el médico asignado o admin
+      let isAssignedOrAdmin = isAdmin()
+        || resource.data.medico_id == request.auth.uid
+        || (currentState == 'pendiente' && newState == 'aceptado');
+      let aceptadoToCompletado = currentState == 'aceptado' && newState == 'completado' && isAssignedOrAdmin;
+      let aceptadoToCancelado = currentState == 'aceptado' && newState == 'cancelado' && isAssignedOrAdmin;
+
+      // No permitir cambios desde estados finales
+      let fromFinalState = currentState in ['completado', 'cancelado'] && currentState != newState;
+
+      return !fromFinalState &&
+        (stateUnchanged || pendienteToAceptado || pendienteToCancelado ||
+         aceptadoToCompletado || aceptadoToCancelado);
+    }
+  }
+}
