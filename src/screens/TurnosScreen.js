@@ -64,7 +64,7 @@ export default function TurnosScreen({ navigation }) {
             const data = await getAllTurnos();
             setTurnos(data);
         } catch (error) {
-            console.error('Error al cargar turnos:', error);
+            if (__DEV__) console.error('Error al cargar turnos:', error);
         } finally {
             setLoading(false);
             setRefreshing(false);

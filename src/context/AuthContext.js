@@ -70,7 +70,7 @@ export function AuthProvider({ children }) {
                         setUserRole(null);
                     }
                 } catch (error) {
-                    console.error('Error al obtener rol del usuario:', error);
+                    if (__DEV__) console.error('Error al obtener rol del usuario:', error);
                     setUserRole(null);
                 }
             } else {

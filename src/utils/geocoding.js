@@ -58,7 +58,7 @@ export const geocodeAddress = async (direccion) => {
         });
 
         if (!response.ok) {
-            console.warn('Geocoding: respuesta no OK:', response.status);
+            if (__DEV__) console.warn('Geocoding: respuesta no OK:', response.status);
             return null;
         }
 
@@ -74,7 +74,7 @@ export const geocodeAddress = async (direccion) => {
 
         return null;
     } catch (error) {
-        console.error('Error en geocoding:', error);
+        if (__DEV__) console.error('Error en geocoding:', error);
         return null;
     }
 };
@@ -124,7 +124,7 @@ export const geocodeAddressVerbose = async (direccion) => {
 
         return null;
     } catch (error) {
-        console.error('Error en geocoding verbose:', error);
+        if (__DEV__) console.error('Error en geocoding verbose:', error);
         return null;
     }
 };
@@ -184,7 +184,7 @@ export const reverseGeocode = async (lat, lng) => {
 
         return null;
     } catch (error) {
-        console.error('Error en reverse geocoding:', error);
+        if (__DEV__) console.error('Error en reverse geocoding:', error);
         return null;
     }
 };

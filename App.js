@@ -68,7 +68,7 @@ export default function App() {
           'Montserrat-Bold': Montserrat_700Bold,
         });
       } catch (error) {
-        console.warn('Error al cargar fuentes:', error);
+        if (__DEV__) console.warn('Error al cargar fuentes:', error);
       } finally {
         setFontsLoaded(true);
       }

@@ -26,6 +26,11 @@
  * Estrategia de costos (CONTEXT.md §2, §4):
  *   - Cada entrada es un documento separado (no arrays gigantes)
  *   - queries puntuales con getDocs (sin listeners en tiempo real)
+ * 
+ * SEGURIDAD:
+ *   - Validación de datos de entrada antes de escribir
+ *   - Whitelist de campos permitidos en updates
+ *   - Límite de tamaño en notas clínicas
  */
 
 import { db } from './firebase';
@@ -41,6 +46,13 @@ import {
     orderBy,
     serverTimestamp,
 } from 'firebase/firestore';
+
+// ── Campos permitidos para update (whitelist) ──
+const ALLOWED_UPDATE_FIELDS = ['nota', 'progreso'];
+
+// ── Límites de tamaño ──
+const MAX_NOTA_LENGTH = 10000;  // 10k caracteres para notas clínicas
+const MAX_PROGRESO_LENGTH = 500;
 
 /**
  * Obtiene la referencia a la subcolección de historia clínica de un paciente.
@@ -64,6 +76,10 @@ const getHistoriaRef = (pacienteId) => {
  * @returns {Promise<Array>} Lista de entradas de historia clínica
  */
 export const getHistoriaByPaciente = async (pacienteId) => {
+    if (!pacienteId || typeof pacienteId !== 'string') {
+        throw new Error('ID de paciente inválido.');
+    }
+
     const historiaRef = getHistoriaRef(pacienteId);
     const q = query(historiaRef, orderBy('fecha', 'desc'));
     const snapshot = await getDocs(q);
@@ -81,6 +97,8 @@ export const getHistoriaByPaciente = async (pacienteId) => {
  * @returns {Promise<object|null>} La entrada o null si no existe
  */
 export const getEntradaById = async (pacienteId, entradaId) => {
+    if (!pacienteId || !entradaId) return null;
+
     const docRef = doc(db, 'pacientes', pacienteId, 'historia_clinica', entradaId);
     const snapshot = await getDoc(docRef);
     if (snapshot.exists()) {
@@ -90,8 +108,55 @@ export const getEntradaById = async (pacienteId, entradaId) => {
 };
 
 /**
+ * Valida los datos de una entrada de historia clínica.
+ * 
+ * @param {object} data - Datos a validar
+ * @param {boolean} isCreate - true si es creación
+ * @throws {Error} Si los datos no son válidos
+ */
+const validateHistoriaData = (data, isCreate = true) => {
+    // En creación, paciente_id y nota son requeridos
+    if (isCreate) {
+        if (!data.paciente_id || typeof data.paciente_id !== 'string') {
+            throw new Error('El ID del paciente es requerido.');
+        }
+        if (!data.nota || typeof data.nota !== 'string') {
+            throw new Error('La nota clínica es requerida.');
+        }
+        if (!data.medico || typeof data.medico !== 'string') {
+            throw new Error('El ID del médico es requerido.');
+        }
+    }
+
+    // Validar longitud de nota
+    if (data.nota !== undefined) {
+        if (typeof data.nota !== 'string') {
+            throw new Error('La nota debe ser un texto.');
+        }
+        const nota = data.nota.trim();
+        if (isCreate && nota.length < 1) {
+            throw new Error('La nota clínica no puede estar vacía.');
+        }
+        if (nota.length > MAX_NOTA_LENGTH) {
+            throw new Error(`La nota es demasiado larga (máximo ${MAX_NOTA_LENGTH} caracteres).`);
+        }
+    }
+
+    // Validar longitud de progreso
+    if (data.progreso !== undefined && data.progreso !== '') {
+        if (typeof data.progreso !== 'string') {
+            throw new Error('El progreso debe ser un texto.');
+        }
+        if (data.progreso.length > MAX_PROGRESO_LENGTH) {
+            throw new Error(`El progreso es demasiado largo (máximo ${MAX_PROGRESO_LENGTH} caracteres).`);
+        }
+    }
+};
+
+/**
  * Crea una nueva entrada de historia clínica para un paciente.
  * Cada visita médica genera una nueva entrada en la subcolección.
+ * Valida los datos antes de guardar.
  * 
  * @param {object} data - Datos de la entrada
  * @param {string} data.paciente_id - ID del paciente
@@ -101,14 +166,18 @@ export const getEntradaById = async (pacienteId, entradaId) => {
  * @param {string} [data.progreso] - Estado de progreso del paciente
  * @param {string} [data.turnoId] - ID del turno vinculado (opcional)
  * @returns {Promise<DocumentReference>}
+ * @throws {Error} Si los datos no pasan la validación
  */
 export const createEntradaHistoria = async (data) => {
+    // Validar datos de entrada
+    validateHistoriaData(data, true);
+
     const historiaRef = getHistoriaRef(data.paciente_id);
     return addDoc(historiaRef, {
         medico: data.medico,
-        medicoNombre: data.medicoNombre || '',
-        nota: data.nota,
-        progreso: data.progreso || '',
+        medicoNombre: data.medicoNombre ? data.medicoNombre.trim() : '',
+        nota: data.nota.trim(),
+        progreso: data.progreso ? data.progreso.trim() : '',
         turnoId: data.turnoId || null,
         fecha: serverTimestamp(),
         creadoEn: serverTimestamp(),
@@ -117,16 +186,38 @@ export const createEntradaHistoria = async (data) => {
 
 /**
  * Actualiza una entrada existente de historia clínica.
+ * Solo permite modificar campos de la whitelist (nota y progreso).
+ * Campos como 'medico', 'fecha', 'creadoEn' NO pueden ser modificados.
  * 
  * @param {string} pacienteId - ID del paciente
  * @param {string} entradaId - ID del documento de entrada
- * @param {object} data - Campos a actualizar (nota, progreso)
+ * @param {object} data - Campos a actualizar (solo 'nota' y 'progreso')
  * @returns {Promise<void>}
+ * @throws {Error} Si los datos no pasan la validación
  */
 export const updateEntradaHistoria = async (pacienteId, entradaId, data) => {
+    if (!pacienteId || !entradaId) {
+        throw new Error('IDs de paciente y entrada son requeridos.');
+    }
+
+    // Validar datos de entrada
+    validateHistoriaData(data, false);
+
+    // Filtrar solo campos permitidos (whitelist)
+    const sanitized = {};
+    for (const key of ALLOWED_UPDATE_FIELDS) {
+        if (data[key] !== undefined) {
+            sanitized[key] = typeof data[key] === 'string' ? data[key].trim() : data[key];
+        }
+    }
+
+    if (Object.keys(sanitized).length === 0) {
+        throw new Error('No se proporcionaron campos válidos para actualizar.');
+    }
+
     const docRef = doc(db, 'pacientes', pacienteId, 'historia_clinica', entradaId);
     return updateDoc(docRef, {
-        ...data,
+        ...sanitized,
         actualizadoEn: serverTimestamp(),
     });
 };
@@ -139,6 +230,10 @@ export const updateEntradaHistoria = async (pacienteId, entradaId, data) => {
  * @returns {Promise<void>}
  */
 export const deleteEntradaHistoria = async (pacienteId, entradaId) => {
+    if (!pacienteId || !entradaId) {
+        throw new Error('IDs de paciente y entrada son requeridos.');
+    }
+
     const docRef = doc(db, 'pacientes', pacienteId, 'historia_clinica', entradaId);
     return deleteDoc(docRef);
 };
@@ -151,6 +246,8 @@ export const deleteEntradaHistoria = async (pacienteId, entradaId) => {
  * @returns {Promise<number>} Cantidad de entradas
  */
 export const getHistoriaCount = async (pacienteId) => {
+    if (!pacienteId || typeof pacienteId !== 'string') return 0;
+
     const historiaRef = getHistoriaRef(pacienteId);
     const snapshot = await getDocs(historiaRef);
     return snapshot.size;

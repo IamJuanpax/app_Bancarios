@@ -71,7 +71,7 @@ export const requestNotificationPermissions = async () => {
         const { status } = await Notifications.requestPermissionsAsync();
 
         if (status !== 'granted') {
-            console.warn('⚠️ Permisos de notificaciones denegados');
+            if (__DEV__) console.warn('⚠️ Permisos de notificaciones denegados');
             return false;
         }
 
@@ -83,11 +83,11 @@ export const requestNotificationPermissions = async () => {
         // En Expo Go (SDK 53+), las notificaciones remotas no están disponibles.
         // Este error es esperado y NO afecta a las notificaciones locales.
         if (error?.message?.includes('remote notifications') || error?.message?.includes('expo-notifications')) {
-            console.log('ℹ️ Notificaciones remotas no disponibles en Expo Go (esperado, usamos solo locales)');
+            if (__DEV__) console.log('ℹ️ Notificaciones remotas no disponibles en Expo Go (esperado, usamos solo locales)');
             await setupAndroidChannels();
             return true;
         }
-        console.error('Error al solicitar permisos de notificaciones:', error);
+        if (__DEV__) console.error('Error al solicitar permisos de notificaciones:', error);
         return false;
     }
 };
@@ -119,7 +119,7 @@ const setupAndroidChannels = async () => {
             sound: 'default',
         });
     } catch (e) {
-        console.warn('⚠️ No se pudieron configurar canales Android:', e.message);
+        if (__DEV__) console.warn('⚠️ No se pudieron configurar canales Android:', e.message);
     }
 };
 
@@ -147,7 +147,7 @@ export const sendLocalNotification = async ({ title, body, data = {} }) => {
         });
         return notificationId;
     } catch (error) {
-        console.error('Error al enviar notificación:', error);
+        if (__DEV__) console.error('Error al enviar notificación:', error);
         return null;
     }
 };
@@ -179,7 +179,7 @@ export const scheduleReminder = async ({
 
         // Si la fecha del recordatorio ya pasó, no programar
         if (reminderDate <= new Date()) {
-            console.log(`⏭️ Recordatorio para turno ${turnoId} no programado (fecha ya pasada)`);
+            if (__DEV__) console.log(`⏭️ Recordatorio para turno ${turnoId} no programado (fecha ya pasada)`);
             return null;
         }
 
@@ -218,10 +218,10 @@ export const scheduleReminder = async ({
         // Guardar el mapping turnoId → notificationId en AsyncStorage
         await saveReminderMapping(turnoId, notificationId);
 
-        console.log(`✅ Recordatorio programado para turno ${turnoId} en ${secondsUntilReminder}s`);
+        if (__DEV__) console.log(`✅ Recordatorio programado para turno ${turnoId} en ${secondsUntilReminder}s`);
         return notificationId;
     } catch (error) {
-        console.error('Error al programar recordatorio:', error);
+        if (__DEV__) console.error('Error al programar recordatorio:', error);
         return null;
     }
 };
@@ -243,13 +243,13 @@ export const cancelReminder = async (turnoId) => {
             // Limpiar del storage
             delete reminders[turnoId];
             await AsyncStorage.setItem(REMINDER_STORAGE_KEY, JSON.stringify(reminders));
-            console.log(`🗑️ Recordatorio cancelado para turno ${turnoId}`);
+            if (__DEV__) console.log(`🗑️ Recordatorio cancelado para turno ${turnoId}`);
             return true;
         }
 
         return false;
     } catch (error) {
-        console.error('Error al cancelar recordatorio:', error);
+        if (__DEV__) console.error('Error al cancelar recordatorio:', error);
         return false;
     }
 };
@@ -264,9 +264,9 @@ export const cancelAllReminders = async () => {
     try {
         await Notifications.cancelAllScheduledNotificationsAsync();
         await AsyncStorage.removeItem(REMINDER_STORAGE_KEY);
-        console.log('🗑️ Todos los recordatorios cancelados');
+        if (__DEV__) console.log('🗑️ Todos los recordatorios cancelados');
     } catch (error) {
-        console.error('Error al cancelar todos los recordatorios:', error);
+        if (__DEV__) console.error('Error al cancelar todos los recordatorios:', error);
     }
 };
 
@@ -281,7 +281,7 @@ const saveReminderMapping = async (turnoId, notificationId) => {
         reminders[turnoId] = notificationId;
         await AsyncStorage.setItem(REMINDER_STORAGE_KEY, JSON.stringify(reminders));
     } catch (error) {
-        console.error('Error al guardar mapping de recordatorio:', error);
+        if (__DEV__) console.error('Error al guardar mapping de recordatorio:', error);
     }
 };
 
@@ -293,7 +293,7 @@ const getReminderMappings = async () => {
         const json = await AsyncStorage.getItem(REMINDER_STORAGE_KEY);
         return json ? JSON.parse(json) : {};
     } catch (error) {
-        console.error('Error al leer mappings de recordatorios:', error);
+        if (__DEV__) console.error('Error al leer mappings de recordatorios:', error);
         return {};
     }
 };

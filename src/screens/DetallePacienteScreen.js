@@ -73,7 +73,7 @@ export default function DetallePacienteScreen({ route, navigation }) {
             const historiaData = await getHistoriaByPaciente(pacienteId);
             setHistoria(historiaData);
         } catch (error) {
-            console.error('Error al cargar paciente:', error);
+            if (__DEV__) console.error('Error al cargar paciente:', error);
         } finally {
             setLoading(false);
             setRefreshing(false);
@@ -96,7 +96,7 @@ export default function DetallePacienteScreen({ route, navigation }) {
                 setUserLocation(userLoc);
             }
         } catch (error) {
-            console.warn('No se pudo obtener ubicación:', error);
+            if (__DEV__) console.warn('No se pudo obtener ubicación:', error);
         }
     };
 
@@ -135,9 +135,13 @@ export default function DetallePacienteScreen({ route, navigation }) {
                     onPress: async () => {
                         try {
                             await deletePaciente(pacienteId);
+                            Alert.alert('✅ Paciente eliminado', 'El paciente y todos sus datos asociados han sido eliminados.');
                             navigation.goBack();
                         } catch (error) {
-                            Alert.alert('Error', 'No se pudo eliminar el paciente.');
+                            // Mostrar el mensaje de error específico (ej: "Tiene turnos activos" o "Permiso denegado")
+                            const errorMessage = error.message || 'No se pudo eliminar el paciente. Verificá tu conexión o permisos.';
+                            Alert.alert('❌ Error al eliminar', errorMessage);
+                            if (__DEV__) console.error('Error al eliminar paciente:', error);
                         }
                     },
                 },

@@ -77,7 +77,7 @@ export default function PacienteFormScreen({ route, navigation }) {
                 setTelefono(data.telefono || '');
             }
         } catch (error) {
-            console.error('Error al cargar paciente:', error);
+            if (__DEV__) console.error('Error al cargar paciente:', error);
         } finally {
             setIsLoadingData(false);
         }
@@ -141,7 +141,7 @@ export default function PacienteFormScreen({ route, navigation }) {
                 );
             }
         } catch (error) {
-            console.error('Error al obtener ubicación:', error);
+            if (__DEV__) console.error('Error al obtener ubicación:', error);
             Alert.alert('Error', 'No se pudo obtener la ubicación. Verificá que el GPS esté activado.');
         } finally {
             setGettingLocation(false);
@@ -234,7 +234,7 @@ export default function PacienteFormScreen({ route, navigation }) {
 
             navigation.goBack();
         } catch (error) {
-            console.error('Error al guardar paciente:', error);
+            if (__DEV__) console.error('Error al guardar paciente:', error);
             Alert.alert('Error', 'No se pudo guardar el paciente. Intentá de nuevo.');
         } finally {
             setIsLoading(false);

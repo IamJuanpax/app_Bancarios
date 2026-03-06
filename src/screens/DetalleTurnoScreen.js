@@ -98,12 +98,12 @@ export default function DetalleTurnoScreen({ route, navigation }) {
                             setMedicoNombreDisplay(medicoDoc.data().nombre);
                         }
                     } catch (e) {
-                        console.warn('No se pudo cargar nombre del médico:', e);
+                        if (__DEV__) console.warn('No se pudo cargar nombre del médico:', e);
                     }
                 }
             }
         } catch (error) {
-            console.error('Error al cargar turno:', error);
+            if (__DEV__) console.error('Error al cargar turno:', error);
         } finally {
             setLoading(false);
         }
@@ -157,7 +157,7 @@ export default function DetalleTurnoScreen({ route, navigation }) {
 
             return { enRango, distancia: dist };
         } catch (error) {
-            console.error('Error al verificar proximidad:', error);
+            if (__DEV__) console.error('Error al verificar proximidad:', error);
             Alert.alert('Error', 'No se pudo obtener tu ubicación. Intentá de nuevo.');
             return null;
         } finally {
@@ -224,12 +224,12 @@ export default function DetalleTurnoScreen({ route, navigation }) {
                                     turnoId
                                 );
                             } catch (notifError) {
-                                console.warn('Notificación no enviada:', notifError?.message);
+                                if (__DEV__) console.warn('Notificación no enviada:', notifError?.message);
                             }
 
                             Alert.alert('✅ Turno aceptado', 'El turno fue aceptado y se programó un recordatorio 1 hora antes.');
                         } catch (error) {
-                            console.error('Error al aceptar turno:', error);
+                            if (__DEV__) console.error('Error al aceptar turno:', error);
                             Alert.alert('Error', `No se pudo aceptar el turno: ${error.message}`);
                         } finally {
                             setActionLoading(false);

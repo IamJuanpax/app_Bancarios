@@ -80,7 +80,7 @@ export default function NuevaEntradaHistoriaScreen({ route, navigation }) {
             Alert.alert('✅ Entrada guardada', 'La historia clínica se actualizó correctamente.');
             navigation.goBack();
         } catch (error) {
-            console.error('Error al guardar entrada:', error);
+            if (__DEV__) console.error('Error al guardar entrada:', error);
             Alert.alert('Error', 'No se pudo guardar la entrada. Intentá de nuevo.');
         } finally {
             setIsLoading(false);

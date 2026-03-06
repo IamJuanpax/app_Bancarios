@@ -59,7 +59,7 @@ export function NotificationProvider({ navigationRef, children }) {
         } catch (error) {
             // Expo Go SDK 53+ no soporta notificaciones remotas.
             // Las locales siguen funcionando, ignoramos el error.
-            console.log('ℹ️ Configuración de notificaciones (modo limitado en Expo Go):', error?.message);
+            if (__DEV__) console.log('ℹ️ Configuración de notificaciones (modo limitado en Expo Go):', error?.message);
         }
     }, []);
 
@@ -68,7 +68,7 @@ export function NotificationProvider({ navigationRef, children }) {
         if (user) {
             requestNotificationPermissions().catch((error) => {
                 // Error esperado en Expo Go SDK 53+ para notificaciones remotas.
-                console.log('ℹ️ Permisos de notificaciones (modo limitado en Expo Go):', error?.message);
+                if (__DEV__) console.log('ℹ️ Permisos de notificaciones (modo limitado en Expo Go):', error?.message);
             });
         }
     }, [user]);
@@ -90,13 +90,13 @@ export function NotificationProvider({ navigationRef, children }) {
                             }
                             navigationRef.current.navigate(data.screen, params);
                         } catch (navError) {
-                            console.warn('No se pudo navegar desde la notificación:', navError);
+                            if (__DEV__) console.warn('No se pudo navegar desde la notificación:', navError);
                         }
                     }
                 }
             );
         } catch (error) {
-            console.log('ℹ️ Listener de notificaciones no disponible en Expo Go:', error?.message);
+            if (__DEV__) console.log('ℹ️ Listener de notificaciones no disponible en Expo Go:', error?.message);
         }
 
         // Limpiar listener al desmontar

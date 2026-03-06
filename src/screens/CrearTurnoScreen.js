@@ -79,7 +79,7 @@ export default function CrearTurnoScreen({ route, navigation }) {
             const data = await getPacientes();
             setPacientes(data);
         } catch (error) {
-            console.error('Error al cargar pacientes:', error);
+            if (__DEV__) console.error('Error al cargar pacientes:', error);
         }
     };
 
@@ -223,13 +223,13 @@ export default function CrearTurnoScreen({ route, navigation }) {
                 await notifyTurnoCreado(pacienteNombre, fechaHora);
             } catch (notifError) {
                 // No bloquear la creación del turno si falla la notificación
-                console.warn('Notificación no enviada:', notifError?.message);
+                if (__DEV__) console.warn('Notificación no enviada:', notifError?.message);
             }
 
             Alert.alert('✅ Turno creado', 'El turno se programó exitosamente.');
             navigation.goBack();
         } catch (error) {
-            console.error('Error al crear turno:', error);
+            if (__DEV__) console.error('Error al crear turno:', error);
             Alert.alert('Error', 'No se pudo crear el turno. Intentá de nuevo.');
         } finally {
             setIsLoading(false);

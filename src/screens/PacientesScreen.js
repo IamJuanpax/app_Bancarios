@@ -64,7 +64,7 @@ export default function PacientesScreen({ navigation }) {
             const data = await getPacientes();
             setPacientes(data);
         } catch (error) {
-            console.error('Error al cargar pacientes:', error);
+            if (__DEV__) console.error('Error al cargar pacientes:', error);
         } finally {
             setLoading(false);
             setRefreshing(false);
@@ -87,7 +87,7 @@ export default function PacientesScreen({ navigation }) {
                 });
             }
         } catch (error) {
-            console.warn('No se pudo obtener la ubicación:', error);
+            if (__DEV__) console.warn('No se pudo obtener la ubicación:', error);
         }
     };
 

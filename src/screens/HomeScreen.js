@@ -63,7 +63,7 @@ export default function HomeScreen({ navigation }) {
       const turnosData = await getAllTurnos();
       setTurnos(turnosData);
     } catch (error) {
-      console.error('Error al cargar datos del dashboard:', error);
+      if (__DEV__) console.error('Error al cargar datos del dashboard:', error);
     } finally {
       setLoading(false);
       setRefreshing(false);
