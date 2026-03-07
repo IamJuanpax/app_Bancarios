@@ -29,6 +29,8 @@ import {
     Alert,
     RefreshControl,
     Dimensions,
+    Linking,
+    Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
@@ -118,6 +120,41 @@ export default function DetallePacienteScreen({ route, navigation }) {
     const hasValidCoords = paciente?.coordenadas &&
         paciente.coordenadas.lat !== 0 &&
         paciente.coordenadas.lng !== 0;
+
+    /**
+     * Abre la aplicación de mapas nativa (Google Maps o Apple Maps).
+     * Usa las coordenadas guardadas para marcar el punto exacto.
+     */
+    const openMaps = () => {
+        if (!hasValidCoords) {
+            Alert.alert('Ubicación no disponible', 'Este paciente no tiene coordenadas válidas guardadas.');
+            return;
+        }
+
+        const { lat, lng } = paciente.coordenadas;
+        const label = encodeURIComponent(`Paciente: ${paciente.nombre}`);
+        
+        // Esquemas de URL nativos para evitar costos de API
+        // iOS: usa Apple Maps o Google Maps
+        // Android: usa Google Maps
+        const url = Platform.select({
+            ios: `maps:0,0?q=${label}@${lat},${lng}`,
+            android: `geo:0,0?q=${lat},${lng}(${label})`
+        });
+
+        Linking.canOpenURL(url).then(supported => {
+            if (supported) {
+                Linking.openURL(url);
+            } else {
+                // Fallback: intentar abrir vía web si falla el esquema nativo
+                const webUrl = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+                Linking.openURL(webUrl);
+            }
+        }).catch(err => {
+            if (__DEV__) console.error('Error al abrir mapas:', err);
+            Alert.alert('Error', 'No se pudo abrir la aplicación de mapas.');
+        });
+    };
 
     /**
      * Elimina el paciente (solo admin puede hacerlo).
@@ -281,11 +318,11 @@ export default function DetallePacienteScreen({ route, navigation }) {
                     </TouchableOpacity>
 
                     <TouchableOpacity
-                        style={[styles.actionButton, styles.actionButtonDanger]}
-                        onPress={handleDelete}
+                        style={styles.actionButton}
+                        onPress={openMaps}
                     >
-                        <Text style={styles.actionIcon}>🗑️</Text>
-                        <Text style={[styles.actionLabel, { color: theme.colors.error }]}>Eliminar</Text>
+                        <Text style={styles.actionIcon}>🗺️</Text>
+                        <Text style={styles.actionLabel}>Ir con GPS</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
@@ -294,6 +331,14 @@ export default function DetallePacienteScreen({ route, navigation }) {
                     >
                         <Text style={styles.actionIcon}>📅</Text>
                         <Text style={styles.actionLabel}>Crear Turno</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={[styles.actionButton, styles.actionButtonDanger]}
+                        onPress={handleDelete}
+                    >
+                        <Text style={styles.actionIcon}>🗑️</Text>
+                        <Text style={[styles.actionLabel, { color: theme.colors.error }]}>Eliminar</Text>
                     </TouchableOpacity>
                 </View>
 
