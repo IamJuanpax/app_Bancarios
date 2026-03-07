@@ -44,15 +44,23 @@ const FILTROS = [
     { key: 'completado', label: 'Completados' },
 ];
 
-export default function TurnosScreen({ navigation }) {
+export default function TurnosScreen({ navigation, route }) {
     const { user, userRole } = useAuth();
+    const { initialFilter } = route.params || {};
 
     // ── Estado ──
     const [turnos, setTurnos] = useState([]);
-    const [filtroActivo, setFiltroActivo] = useState('todos');
+    const [filtroActivo, setFiltroActivo] = useState(initialFilter || 'todos');
     const [searchQuery, setSearchQuery] = useState('');
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
+
+    // Actualizar filtro si cambia el parámetro de la ruta (desde Home)
+    React.useEffect(() => {
+        if (initialFilter) {
+            setFiltroActivo(initialFilter);
+        }
+    }, [initialFilter]);
 
     useFocusEffect(
         useCallback(() => {
@@ -79,13 +87,19 @@ export default function TurnosScreen({ navigation }) {
     };
 
     /**
-     * Lógica de filtrado combinada (Estado + Texto de búsqueda)
+     * Lógica de filtrado combinada (Estado + Texto de búsqueda + Seguridad de Rol)
      */
     const turnosFiltrados = turnos.filter(turno => {
         // 1. Filtrar por estado (chips)
         const coincideEstado = filtroActivo === 'todos' || turno.estado === filtroActivo;
         
-        // 2. Filtrar por texto (lupita)
+        // 2. Seguridad: Si es médico y el filtro es 'completado' o 'aceptado', solo ver los suyos.
+        // Los 'pendientes' los ven todos para poder tomarlos.
+        if (userRole === 'medico' && (filtroActivo === 'completado' || filtroActivo === 'aceptado')) {
+            if (turno.medicoId !== user.uid) return false;
+        }
+
+        // 3. Filtrar por texto (lupita)
         const searchLower = searchQuery.toLowerCase().trim();
         const coincideBusqueda = 
             !searchLower || 

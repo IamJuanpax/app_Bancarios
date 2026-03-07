@@ -83,13 +83,29 @@ export default function HomeScreen({ navigation }) {
 
   // ── Cálculo de métricas ──
   const turnosPendientes = turnos.filter(t => t.estado === 'pendiente').length;
+  
+  // Turnos de hoy filtrados por médico si no es admin
   const turnosHoy = turnos.filter(t => {
     if (!t.fecha_hora) return false;
     const fecha = t.fecha_hora.toDate ? t.fecha_hora.toDate() : new Date(t.fecha_hora);
     const hoy = new Date();
-    return fecha.toDateString() === hoy.toDateString();
+    const esHoy = fecha.toDateString() === hoy.toDateString();
+    
+    // Si es médico, solo ve los suyos de hoy
+    if (userRole === 'medico') {
+      return esHoy && t.medicoId === user.uid;
+    }
+    return esHoy;
   });
-  const turnosCompletados = turnos.filter(t => t.estado === 'completado').length;
+
+  // Turnos completados filtrados por médico
+  const turnosCompletados = turnos.filter(t => {
+    const esCompletado = t.estado === 'completado';
+    if (userRole === 'medico') {
+      return esCompletado && t.medicoId === user.uid;
+    }
+    return esCompletado;
+  }).length;
 
   // ── Carga inicial ──
   if (loading) {
@@ -140,13 +156,14 @@ export default function HomeScreen({ navigation }) {
             value={turnosPendientes}
             label="Pendientes"
             color={theme.colors.warning}
-            onPress={() => navigation.navigate('Turnos')}
+            onPress={() => navigation.navigate('Turnos', { initialFilter: 'pendiente' })}
           />
           <StatCard
             icon="✅"
             value={turnosCompletados}
             label="Completados"
             color={theme.colors.success}
+            onPress={() => navigation.navigate('Turnos', { initialFilter: 'completado' })}
           />
         </View>
 
