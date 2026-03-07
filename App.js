@@ -2,21 +2,6 @@
  * ============================================================
  * APP.JS – Punto de entrada principal de RehabMobile
  * ============================================================
- * 
- * Responsabilidades:
- * 1. Cargar las fuentes personalizadas (Inter y Montserrat) con expo-font
- * 2. Envolver toda la app en el AuthProvider (contexto de autenticación)
- * 3. Envolver en NotificationProvider (notificaciones locales)
- * 4. Mostrar un splash/spinner mientras se cargan las fuentes
- * 5. Renderizar el sistema de navegación principal
- * 
- * Jerarquía de componentes:
- *   App
- *   └── AuthProvider               (Contexto de autenticación global)
- *       └── NotificationProvider   (Notificaciones locales, costo $0)
- *           └── AppNavigator       (Sistema de navegación)
- *               ├── LoginScreen    (Si no está autenticado)
- *               └── [Stack]        (Si está autenticado)
  */
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -24,13 +9,13 @@ import { StatusBar } from 'expo-status-bar';
 import { View, ActivityIndicator, StyleSheet, LogBox } from 'react-native';
 import * as Font from 'expo-font';
 
-// Silenciar el warning de expo-notifications sobre remote notifications en Expo Go.
-// Usamos SOLO notificaciones locales (costo $0), así que este warning no nos afecta.
+// Silenciar warnings de notificaciones remotas (usamos solo locales)
 LogBox.ignoreLogs([
   'expo-notifications',
   'Android Push notifications',
   'remote notifications',
 ]);
+
 import {
   Inter_400Regular,
   Inter_700Bold,
@@ -40,25 +25,18 @@ import {
   Montserrat_700Bold,
 } from '@expo-google-fonts/montserrat';
 
-// Importar contextos y navegador
+// Importar contextos, navegador y protector de errores
 import { AuthProvider } from './src/context/AuthContext';
 import { NotificationProvider } from './src/context/NotificationContext';
 import AppNavigator from './src/navigation/AppNavigator';
+import ErrorBoundary from './src/components/ErrorBoundary';
 import { theme } from './src/theme';
 
 export default function App() {
   const [fontsLoaded, setFontsLoaded] = useState(false);
-  const navigationRef = useRef(null);  // Ref para navegación desde notificaciones
+  const navigationRef = useRef(null);
 
   useEffect(() => {
-    /**
-     * Carga asíncrona de las fuentes personalizadas.
-     * Se registran con los nombres que usa theme.typography:
-     *   - 'Inter-Regular'      → Texto body
-     *   - 'Inter-Bold'         → Texto enfático
-     *   - 'Montserrat-Regular' → Títulos secundarios
-     *   - 'Montserrat-Bold'    → Títulos principales
-     */
     async function loadFonts() {
       try {
         await Font.loadAsync({
@@ -76,7 +54,6 @@ export default function App() {
     loadFonts();
   }, []);
 
-  // Mostrar spinner mientras se cargan las fuentes
   if (!fontsLoaded) {
     return (
       <View style={styles.loadingContainer}>
@@ -86,23 +63,17 @@ export default function App() {
   }
 
   return (
-    <>
-      {/* Barra de estado con estilo automático (oscuro en fondos claros) */}
+    <ErrorBoundary>
+      {/* Barra de estado con estilo automático */}
       <StatusBar style="auto" />
 
-      {/* 
-        AuthProvider envuelve toda la app para que cualquier componente
-        pueda acceder al estado de autenticación con useAuth().
-        
-        NotificationProvider gestiona las notificaciones locales (costo $0).
-        Recibe navigationRef para deep-linking al tocar notificaciones.
-      */}
+      {/* Proveedores de contexto globales */}
       <AuthProvider>
         <NotificationProvider navigationRef={navigationRef}>
           <AppNavigator navigationRef={navigationRef} />
         </NotificationProvider>
       </AuthProvider>
-    </>
+    </ErrorBoundary>
   );
 }
 

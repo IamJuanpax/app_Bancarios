@@ -157,10 +157,9 @@ service cloud.firestore {
       allow update: if hasValidRole()
         && validStateTransition();
 
-      // Eliminar turno: solo si está cancelado o completado
-      // y el usuario tiene rol válido
-      allow delete: if hasValidRole()
-        && resource.data.estado in ['cancelado', 'completado'];
+      // Eliminar turno: SOLO ADMIN (Seguridad reforzada)
+      // Se cambió de hasValidRole() a isAdmin() para evitar que médicos borren historial.
+      allow delete: if isAdmin();
     }
 
     // ── Función de validación de transiciones de estado de turnos ──

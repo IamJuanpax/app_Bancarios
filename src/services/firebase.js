@@ -6,27 +6,20 @@
  * Inicializa Firebase con las credenciales del proyecto.
  * Exporta las instancias de:
  *   - auth: Firebase Authentication (login con email/password)
- *   - db:   Firestore (base de datos NoSQL)
- * 
- * IMPORTANTE: Antes de usar la app en producción, reemplazá
- * los valores de firebaseConfig con las credenciales reales
- * de tu proyecto en la consola de Firebase:
- * https://console.firebase.google.com/
+ *   - db:   Firestore (base de datos NoSQL con modo offline)
  * 
  * Stack usado:
- *   - Firebase Auth (autenticación, CONTEXT.md §2)
- *   - Firestore (base de datos, CONTEXT.md §2)
- *   - Firebase Cloud Messaging se configura en otro archivo (notificaciones)
- * 
- * Estrategia de costos (CONTEXT.md §2):
- *   - Se usa el plan gratuito (Spark Plan) inicialmente
- *   - Se evitan listeners en tiempo real (onSnapshot)
- *   - Se usan consultas puntuales (getDocs/getDoc)
+ *   - Firebase Auth (autenticación con persistencia local)
+ *   - Firestore (con persistentLocalCache para modo offline)
  */
 
 import { initializeApp } from 'firebase/app';
 import { initializeAuth, getReactNativePersistence } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { 
+  initializeFirestore, 
+  persistentLocalCache, 
+  persistentMultipleTabManager 
+} from 'firebase/firestore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   FIREBASE_API_KEY,
@@ -39,7 +32,6 @@ import {
 } from '@env';
 
 // ── Configuración de Firebase ──
-// Las credenciales se leen del archivo .env (no se suben a GitHub)
 const firebaseConfig = {
   apiKey: FIREBASE_API_KEY,
   authDomain: FIREBASE_AUTH_DOMAIN,
@@ -55,21 +47,21 @@ const app = initializeApp(firebaseConfig);
 
 /**
  * Inicializar Firebase Auth con persistencia en AsyncStorage.
- * Esto permite que la sesión del usuario se mantenga entre 
- * reinicios de la app (no necesita re-loguearse cada vez).
+ * Mantiene la sesión iniciada entre reinicios de la app.
  */
 export const auth = initializeAuth(app, {
   persistence: getReactNativePersistence(AsyncStorage),
 });
 
 /**
- * Inicializar Firestore.
- * Usamos Firestore como base de datos principal para:
- *   - Pacientes
- *   - Historia Clínica
- *   - Turnos
- *   - Usuarios (roles)
+ * Inicializar Firestore con MODO OFFLINE habilitado.
+ * Permite que el médico vea y cargue datos aunque no tenga señal.
+ * Los cambios se sincronizan automáticamente al recuperar internet.
  */
-export const db = getFirestore(app);
+export const db = initializeFirestore(app, {
+  localCache: persistentLocalCache({
+    tabManager: persistentMultipleTabManager()
+  })
+});
 
 export default app;

@@ -122,6 +122,36 @@ export default function DetallePacienteScreen({ route, navigation }) {
         paciente.coordenadas.lng !== 0;
 
     /**
+     * Abre WhatsApp con un mensaje predefinido para el paciente.
+     */
+    const openWhatsApp = () => {
+        if (!paciente.telefono) {
+            Alert.alert('Sin teléfono', 'Este paciente no tiene un número de teléfono cargado.');
+            return;
+        }
+
+        // Limpiar el número de caracteres no numéricos
+        const cleanNumber = paciente.telefono.replace(/\D/g, '');
+        // Asumir código de país Argentina (54) si no tiene +
+        const fullNumber = cleanNumber.startsWith('54') ? cleanNumber : `54${cleanNumber}`;
+        
+        const message = encodeURIComponent(`Hola ${paciente.nombre}, soy tu kinesiólogo de RehabMobile. Estoy en camino.`);
+        const url = `whatsapp://send?phone=${fullNumber}&text=${message}`;
+
+        Linking.canOpenURL(url).then(supported => {
+            if (supported) {
+                Linking.openURL(url);
+            } else {
+                // Fallback: intentar vía web si no tiene la app instalada
+                const webUrl = `https://wa.me/${fullNumber}?text=${message}`;
+                Linking.openURL(webUrl);
+            }
+        }).catch(err => {
+            Alert.alert('Error', 'No se pudo abrir WhatsApp.');
+        });
+    };
+
+    /**
      * Abre la aplicación de mapas nativa (Google Maps o Apple Maps).
      * Usa las coordenadas guardadas para marcar el punto exacto.
      */
@@ -323,6 +353,14 @@ export default function DetallePacienteScreen({ route, navigation }) {
                     >
                         <Text style={styles.actionIcon}>🗺️</Text>
                         <Text style={styles.actionLabel}>Ir con GPS</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={styles.actionButton}
+                        onPress={openWhatsApp}
+                    >
+                        <Text style={styles.actionIcon}>💬</Text>
+                        <Text style={styles.actionLabel}>WhatsApp</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
