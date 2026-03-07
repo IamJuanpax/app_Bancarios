@@ -36,6 +36,7 @@ export default function LoginScreen() {
   // ── Estado local ──
   const [email, setEmail] = useState('');           // Email del usuario
   const [password, setPassword] = useState('');      // Contraseña
+  const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false); // Indicador de procesando
   const [error, setError] = useState('');             // Mensaje de error
 
@@ -122,16 +123,25 @@ export default function LoginScreen() {
           {/* Campo de Contraseña */}
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Contraseña</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Tu contraseña"
-              placeholderTextColor={theme.colors.textMuted}
-              secureTextEntry={true}           // Ocultar caracteres
-              value={password}
-              onChangeText={setPassword}
-              editable={!isLoading}
-              onSubmitEditing={handleLogin}     // Enter = intentar login
-            />
+            <View style={styles.passwordInputContainer}>
+              <TextInput
+                style={styles.passwordInput}
+                placeholder="Tu contraseña"
+                placeholderTextColor={theme.colors.textMuted}
+                secureTextEntry={!showPassword}
+                value={password}
+                onChangeText={setPassword}
+                editable={!isLoading}
+                onSubmitEditing={handleLogin}
+              />
+              <TouchableOpacity
+                onPress={() => setShowPassword(!showPassword)}
+                style={styles.eyeButton}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.eyeText}>{showPassword ? 'Ocultar' : 'Mostrar'}</Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
           {/* Botón de Ingreso */}
@@ -216,6 +226,35 @@ const styles = StyleSheet.create({
   },
   input: {
     ...theme.commonStyles.input,
+    height: 50, // Forzamos altura fija para que coincida con el de contraseña
+  },
+  passwordInputContainer: {
+    ...theme.commonStyles.input,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 0,
+    paddingHorizontal: 0,
+    height: 50, // Misma altura fija
+  },
+  passwordInput: {
+    flex: 1,
+    paddingHorizontal: theme.spacing.m,
+    fontFamily: theme.typography.primary,
+    fontSize: theme.typography.sizes.m,
+    color: theme.colors.text,
+    height: '100%',
+  },
+  eyeButton: {
+    paddingHorizontal: theme.spacing.m,
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  eyeText: {
+    fontFamily: theme.typography.primaryBold,
+    fontSize: 12,
+    color: theme.colors.accent,
+    textTransform: 'uppercase',
   },
   // ── Botón de Login ──
   loginButton: {
